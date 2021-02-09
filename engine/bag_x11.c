@@ -2,6 +2,7 @@
 #include "bag_engine.h"
 
 #include <X11/Xlib.h>
+#include <X11/XKBlib.h>
 #include <X11/extensions/XInput2.h>
 
 #include <GL/glx.h>
@@ -10,6 +11,35 @@
 #include <string.h>
 #include <stdlib.h>
 
+/*
+ * [X] void bagE_pollEvents();
+ * [X] void bagE_swapBuffers();
+ * 
+ * [X] int bagE_getCursorPosition(int *x, int *y);
+ * [X] void bagE_getWindowSize(int *width, int *height);
+ * 
+ * [X] int bagE_isAdaptiveVsyncAvailable(void);
+ * 
+ * [X] int bagE_setHiddenCursor(int value);
+ * [X] void bagE_setFullscreen(int value);
+ * [X] void bagE_setWindowTitle(char *value);
+ * [X] void bagE_setSwapInterval(int value);
+ * [X] void bagE_setCursorPosition(int x, int y);
+ *
+ * [X] bagE_EventWindowClose,
+ * [X] bagE_EventWindowResize,
+ *
+ * [ ] bagE_EventMouseMotion,
+ * [ ] bagE_EventMouseButtonUp,
+ * [ ] bagE_EventMouseButtonDown,
+ * [ ] bagE_EventMouseWheel,
+ * [ ] bagE_EventMousePosition,
+ *
+ * [X] bagE_EventKeyUp,
+ * [X] bagE_EventKeyDown,
+ * [ ] bagE_EventTextUTF8,
+ * [ ] bagE_EventTextUTF32,
+ */
 
 #define GLX_CONTEXT_MAJOR_VERSION_ARB 0x2091
 #define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
@@ -30,9 +60,11 @@ struct bagX11_ProgramStruct
     Display *display;
     Window root;
     Window window;
-    Atom WM_DELETE_WINDOW;
     GLXContext context;
     int adaptiveVsync;
+    Atom WM_DELETE_WINDOW;
+    Atom _NET_WM_STATE;
+    Atom _NET_WM_STATE_FULLSCREEN;
 } bagX11;
 
 typedef struct bagX11_ProgramStruct bagX11_Program;
@@ -204,6 +236,16 @@ int main(int argc, char *argv[])
 
     XMapWindow(bagX11.display, bagX11.window);
 
+    int detectableAutoRepeat;
+    XkbSetDetectableAutoRepeat(bagX11.display, True, &detectableAutoRepeat);
+    if (!detectableAutoRepeat) {
+        fprintf(stderr, "Detectable auto repeat is not supported!\n");
+        exit(-1);
+    }
+
+    bagX11._NET_WM_STATE = XInternAtom(bagX11.display, "_NET_WM_STATE", False);
+    bagX11._NET_WM_STATE_FULLSCREEN = XInternAtom(bagX11.display, "_NET_WM_STATE_FULLSCREEN", False);
+
 
     /* XInput2 */
 
@@ -261,18 +303,16 @@ int main(int argc, char *argv[])
         fprintf(stderr, "'glXSwapIntervalEXT' couldn't be retrieved!\n");
     }
 
-
     bagX11.adaptiveVsync = bagX11_isGLXExtensionSupported(
             glxExtensions,
             "GLX_EXT_swap_control_tear"
     );
 
 #ifdef BAGE_PRINT_DEBUG_INFO
-    if (bagX11.adaptiveVsync) {
+    if (bagX11.adaptiveVsync)
         printf("Adaptive Vsync is supported.\n");
-    } else {
+    else
         printf("Adaptive Vsync isn't supported.\n");
-    }
 #endif
 
     int contextAttribs[] = {
@@ -324,10 +364,35 @@ int main(int argc, char *argv[])
 }
 
 
+static bagE_ModMask bagX11_convertModMask(unsigned int state)
+{
+    bagE_ModMask modMask = 0;
+
+    if (state & ShiftMask)   modMask |= BAGE_MOD_BIT_SHIFT;
+    if (state & LockMask)    modMask |= BAGE_MOD_BIT_LOCK;
+    if (state & ControlMask) modMask |= BAGE_MOD_BIT_CONTROL;
+    if (state & Mod1Mask)    modMask |= BAGE_MOD_BIT_ALT;
+    if (state & Mod4Mask)    modMask |= BAGE_MOD_BIT_SUPER;
+
+    return modMask;
+}
+
+
+static bagE_ButtonMask bagX11_convertButtonMask(unsigned int state)
+{
+    bagE_ButtonMask buttonMask = 0;
+
+    if (state & Button1Mask) buttonMask |= BAGE_BUTTON_BIT_LEFT;
+    if (state & Button2Mask) buttonMask |= BAGE_BUTTON_BIT_MIDDLE;
+    if (state & Button3Mask) buttonMask |= BAGE_BUTTON_BIT_RIGHT;
+
+    return buttonMask;
+}
+
+
 void bagE_pollEvents()
 {
     XEvent xevent;
-    xevent.type = bagE_EventNone;
     bagE_Event event;
 
     XEventsQueued(bagX11.display, QueuedAfterFlush);
@@ -335,28 +400,78 @@ void bagE_pollEvents()
     while (QLength(bagX11.display)) {
         XNextEvent(bagX11.display, &xevent);
 
+        event.type = bagE_EventNone;
+
         switch (xevent.type)
         {
+            case MappingNotify: {
+                XRefreshKeyboardMapping(&(xevent.xmapping));
+            } break;
+
             case ClientMessage: {
-                if ((unsigned int)(xevent.xclient.data.l[0]) == bagX11.WM_DELETE_WINDOW) {
+                if ((unsigned int)(xevent.xclient.data.l[0]) == bagX11.WM_DELETE_WINDOW)
                     event.type = bagE_EventWindowClose;
-                }
             } break;
 
             case Expose: {
-                XExposeEvent *exposeEvent = (XExposeEvent*)&xevent;
+                if (xevent.xexpose.count != 0)
+                    break;
 
-                if (exposeEvent->count == 0) {
-                    event.type = bagE_EventWindowResize;
-                    event.data.windowResize.width = exposeEvent->width;
-                    event.data.windowResize.height = exposeEvent->height;
+                event.type = bagE_EventWindowResize;
+                event.data.windowResize.width = xevent.xexpose.width;
+                event.data.windowResize.height = xevent.xexpose.height;
+            } break;
+
+            case KeyPress:
+            case KeyRelease: {
+                KeySym keySym = XkbKeycodeToKeysym(bagX11.display, xevent.xkey.keycode, 0, 0);
+
+                if (keySym == NoSymbol)
+                    break;
+
+                event.type = xevent.type == KeyPress ? bagE_EventKeyDown : bagE_EventKeyUp;
+                event.data.key.modifiers = bagX11_convertModMask(xevent.xkey.state);
+                event.data.key.buttons = bagX11_convertButtonMask(xevent.xkey.state);
+                event.data.key.key = keySym;
+            } break;
+
+            case ButtonPress:
+            case ButtonRelease: {
+                int buttonCode = xevent.xbutton.button;
+
+                if (buttonCode == 4 || buttonCode == 5) {
+                    if (xevent.type == ButtonRelease)
+                        break;
+
+                    event.type = bagE_EventMouseWheel;
+                    event.data.mouseWheel.scrollUp = buttonCode == 4 ? 1 :-1;
+                    event.data.mouseWheel.modifiers = bagX11_convertModMask(xevent.xbutton.state);
+                    event.data.mouseWheel.buttons = bagX11_convertButtonMask(xevent.xbutton.state);
+                    event.data.mouseWheel.x = xevent.xbutton.x;
+                    event.data.mouseWheel.y = xevent.xbutton.y;
+                } else {
+                    if (buttonCode < 4) {
+                        bagE_Button options[] = {
+                            bagE_ButtonLeft,
+                            bagE_ButtonMiddle,
+                            bagE_ButtonRight
+                        };
+                        event.data.mouseButton.button = options[buttonCode];
+                    } else
+                        event.data.mouseButton.button = buttonCode;
+
+                    event.type = xevent.type == ButtonPress ? bagE_EventMouseButtonDown
+                                                            : bagE_EventMouseButtonUp;
+                    event.data.mouseButton.modifiers = bagX11_convertModMask(xevent.xbutton.state);
+                    event.data.mouseButton.buttons = bagX11_convertButtonMask(xevent.xbutton.state);
+                    event.data.mouseButton.x = xevent.xbutton.x;
+                    event.data.mouseButton.y = xevent.xbutton.y;
                 }
             } break;
         }
-        
-        if (event.type == bagE_EventNone) {
+
+        if (event.type == bagE_EventNone)
             continue;
-        }
 
         bagE_eventHandler(&event);
     }
@@ -374,5 +489,130 @@ void bagE_swapBuffers()
 void bagE_setSwapInterval(int value)
 {
     glXSwapIntervalEXT(bagX11.display, bagX11.window, value);
+}
+
+
+void bagE_setWindowTitle(char *value)
+{
+    XStoreName(bagX11.display, bagX11.window, value);
+}
+
+
+int bagE_isAdaptiveVsyncAvailable(void)
+{
+    return bagX11.adaptiveVsync;
+}
+
+
+void bagE_getWindowSize(int *width, int *height)
+{
+    XWindowAttributes attributes;
+    XGetWindowAttributes(bagX11.display, bagX11.window, &attributes);
+    *width = attributes.width;
+    *height = attributes.height;
+}
+
+
+int bagE_getCursorPosition(int *x, int *y)
+{
+    Window r, c;
+    int rx, ry;
+    unsigned int m;
+    return XQueryPointer(
+            bagX11.display, bagX11.window,
+            &r, &c,
+            &rx, &ry,
+            x, y,
+            &m
+    );
+}
+
+
+void bagE_setCursorPosition(int x, int y)
+{
+    XWarpPointer(bagX11.display, None, bagX11.window, 0, 0, 0, 0, x, y);
+}
+
+
+static void bagX11_sendEventToWM(
+        Atom type,
+        long a, long b, long c,
+        long d, long e
+) {
+    XEvent event = { ClientMessage };
+    event.xclient.window = bagX11.window;
+    event.xclient.format = 32; // Data is 32-bit longs
+    event.xclient.message_type = type;
+    event.xclient.data.l[0] = a;
+    event.xclient.data.l[1] = b;
+    event.xclient.data.l[2] = c;
+    event.xclient.data.l[3] = d;
+    event.xclient.data.l[4] = e;
+
+    XSendEvent(
+            bagX11.display,
+            bagX11.root,
+            False,
+            SubstructureNotifyMask | SubstructureRedirectMask,
+            &event
+    );
+}
+
+
+void bagE_setFullscreen(int value)
+{
+    bagX11_sendEventToWM(
+            bagX11._NET_WM_STATE,
+            value,
+            bagX11._NET_WM_STATE_FULLSCREEN,
+            0, 1, 0
+    );
+}
+
+
+int bagE_setHiddenCursor(int value)
+{
+    if (value) {
+        // XWarpPointer(display, None, window, 0, 0, 0, 0, windowWidth / 2, windowHeight / 2);
+        // lastPointerX = windowWidth / 2;
+        // lastPointerY = windowHeight / 2;
+
+        int grabResult = XGrabPointer(
+                bagX11.display, 
+                bagX11.window,
+                1,
+                ButtonPressMask | ButtonReleaseMask | PointerMotionMask,
+                GrabModeAsync,
+                GrabModeAsync,
+                bagX11.window,
+                None,
+                CurrentTime
+        );
+
+        if (grabResult != GrabSuccess)
+            return 0;
+
+        Cursor invisibleCursor;
+        Pixmap bitmapNoData;
+        XColor black;
+        static char noData[] = { 0, 0, 0, 0, 0, 0, 0, 0 };
+        black.red = black.green = black.blue = 0;
+
+        bitmapNoData = XCreateBitmapFromData(bagX11.display, bagX11.window, noData, 8, 8);
+        invisibleCursor = XCreatePixmapCursor(
+                bagX11.display,
+                bitmapNoData,
+                bitmapNoData,
+                &black, &black, 0, 0
+        );
+        XDefineCursor(bagX11.display, bagX11.window, invisibleCursor);
+        XFreeCursor(bagX11.display, invisibleCursor);
+        XFreePixmap(bagX11.display, bitmapNoData);
+    } else {
+        XUngrabPointer(bagX11.display, CurrentTime);
+        XUndefineCursor(bagX11.display, bagX11.window);
+    }
+
+    return 1;
 }
 

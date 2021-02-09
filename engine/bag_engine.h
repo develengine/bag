@@ -9,10 +9,21 @@ typedef unsigned long bagE_ButtonMask;
 #define BAGE_BUTTON_BIT_RIGHT  0x04
 
 typedef unsigned long bagE_ModMask;
-#define BAGE_MOD_BIT_SHIFT 0x01
-#define BAGE_MOD_BIT_CTRL  0x02
-#define BAGE_MOD_BIT_ALT   0x04
-#define BAGE_MOD_BIT_SUPER 0x08
+#define BAGE_MOD_BIT_SHIFT   0x01
+#define BAGE_MOD_BIT_CONTROL 0x02
+#define BAGE_MOD_BIT_ALT     0x04
+#define BAGE_MOD_BIT_SUPER   0x08
+#define BAGE_MOD_BIT_LOCK    0x10
+
+
+typedef enum
+{
+    bagE_ButtonLeft,
+    bagE_ButtonMiddle,
+    bagE_ButtonRight,
+
+    bagE_ButtonCount
+} bagE_Button;
 
 typedef enum
 {
@@ -46,33 +57,30 @@ typedef struct
 {
     bagE_ButtonMask buttons;
     bagE_ModMask modifiers;
-    int x;
-    int y;
+    int x, y;
 } bagE_Mouse;
 
 typedef struct
 {
     bagE_ButtonMask buttons;
     bagE_ModMask modifiers;
-    int button;
-    int x;
-    int y;
+    int x, y;
+    bagE_Button button;
 } bagE_MouseButton;
 
 typedef struct
 {
     bagE_ButtonMask buttons;
     bagE_ModMask modifiers;
-    float scrollUp;
-    int x;
-    int y;
+    int x, y;
+    int scrollUp;
 } bagE_MouseWheel;
 
 typedef struct
 {
     bagE_ButtonMask buttons;
     bagE_ModMask modifiers;
-    long key;
+    unsigned int key;
 } bagE_Key;
 
 typedef struct
@@ -99,24 +107,23 @@ typedef struct
         bagE_Key          key;
         bagE_TextUTF8     textUTF8;
         bagE_TextUTF32    textUTF32;
-        unsigned int      padding[7];
     } data;
 } bagE_Event;
 
 
 void bagE_pollEvents();
 void bagE_swapBuffers();
-void bagE_exit();
 
-void bagE_getCursorPosition(int *x, int *y);
+int bagE_getCursorPosition(int *x, int *y);
 void bagE_getWindowSize(int *width, int *height);
 
 int bagE_isAdaptiveVsyncAvailable(void);
 
-void bagE_setHiddenMouse(int value);
+int bagE_setHiddenCursor(int value);
 void bagE_setFullscreen(int value);
 void bagE_setWindowTitle(char *value);
 void bagE_setSwapInterval(int value);
+void bagE_setCursorPosition(int x, int y);
 
 /* User defined */
 void bagE_eventHandler(bagE_Event *event);

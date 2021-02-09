@@ -1,6 +1,8 @@
 #ifndef BAG_KEYS_H
 #define BAG_KEYS_H
 
+#include <X11/Xutil.h>
+
 #if 0
 #define KEY_PAIR(w, x) w
 #else
@@ -57,6 +59,7 @@
 #define KEY_COMMA         KEY_PAIR(VK_OEM_COMMA,  XK_comma)
 #define KEY_PERIOD        KEY_PAIR(VK_OEM_PERIOD, XK_period)
 #define KEY_SLASH         KEY_PAIR(VK_OEM_2,      XK_slash)
+#define KEY_SPACE         KEY_PAIR(VK_SPACE,      XK_space)
 
 #define KEY_0             KEY_PAIR('0',           XK_0)
 #define KEY_1             KEY_PAIR('1',           XK_1)
