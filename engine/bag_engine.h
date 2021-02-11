@@ -15,10 +15,12 @@ typedef unsigned long bagE_ModMask;
 #define BAGE_MOD_BIT_SUPER   0x08
 #define BAGE_MOD_BIT_LOCK    0x10
 
+#define BAGE_TEXT_SIZE 12
+
 
 typedef enum
 {
-    bagE_ButtonLeft,
+    bagE_ButtonLeft = 1,
     bagE_ButtonMiddle,
     bagE_ButtonRight,
 
@@ -64,6 +66,13 @@ typedef struct
 {
     bagE_ButtonMask buttons;
     bagE_ModMask modifiers;
+    float x, y;
+} bagE_MouseMotion;
+
+typedef struct
+{
+    bagE_ButtonMask buttons;
+    bagE_ModMask modifiers;
     int x, y;
     bagE_Button button;
 } bagE_MouseButton;
@@ -85,7 +94,7 @@ typedef struct
 
 typedef struct
 {
-    unsigned char text[12];
+    unsigned char text[BAGE_TEXT_SIZE];
 } bagE_TextUTF8;
 
 typedef  struct
@@ -102,6 +111,7 @@ typedef struct
     {
         bagE_WindowResize windowResize;
         bagE_Mouse        mouse;
+        bagE_MouseMotion  mouseMotion;
         bagE_MouseButton  mouseButton;
         bagE_MouseWheel   mouseWheel;
         bagE_Key          key;

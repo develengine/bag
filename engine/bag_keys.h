@@ -1,11 +1,12 @@
 #ifndef BAG_KEYS_H
 #define BAG_KEYS_H
 
-#include <X11/Xutil.h>
+// TODO Convert virtual keys and x keys to hex
 
 #if 0
 #define KEY_PAIR(w, x) w
 #else
+#include <X11/Xutil.h>
 #define KEY_PAIR(w, x) x
 #endif
 

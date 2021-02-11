@@ -5,6 +5,8 @@
 #include "bag_keys.h"
 
 static int running = 1;
+static int printAbsolute = 0;
+static int printRelative = 0;
 
 
 void GLAPIENTRY openglCallback(
@@ -84,8 +86,9 @@ void bagE_eventHandler(bagE_Event *event)
         } break;
 
         case bagE_EventKeyDown: {
-            if (event->data.key.key == KEY_F4) {
-                printf("key down\n");
+            printf("key down\n");
+
+            if (event->data.key.key == KEY_DELETE) {
                 printf("   mods: ");
                 printBin(event->data.key.modifiers);
                 printf("buttons: ");
@@ -102,15 +105,53 @@ void bagE_eventHandler(bagE_Event *event)
                 bagE_setFullscreen((event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) == 0);
             } else if (event->data.key.key == KEY_C) {
                 bagE_setHiddenCursor((event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) == 0);
+            } else if (event->data.key.key == KEY_M) {
+                if (event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) {
+                    printRelative = !printRelative;
+                } else {
+                    printAbsolute = !printAbsolute;
+                }
             }
         } break;
 
         case bagE_EventKeyUp: {
             if (event->data.key.key == KEY_SPACE) {
-                printf("key up\n");
+                printf("space up\n");
             }
         } break;
         
+        case bagE_EventMouseWheel: {
+            printf("MODS SCROLL UP: %d\n", event->data.mouseWheel.scrollUp);
+        } break;
+
+        case bagE_EventMouseButtonDown: {
+            printf("BUTTON DOWN: %d\n", event->data.mouseButton.button);
+        } break;
+
+        case bagE_EventMouseButtonUp: {
+            printf("BUTTON UP: %d\n", event->data.mouseButton.button);
+        } break;
+
+        case bagE_EventMousePosition: {
+            if (printAbsolute) {
+                printf("ABSOLUTE X: %3d, Y: %3d\n", event->data.mouse.x, event->data.mouse.y);
+            }
+        } break;
+
+        case bagE_EventMouseMotion: {
+            if (printRelative) {
+                printf("RELATIVE X: %.2f, Y: %.2f\n", event->data.mouseMotion.x, event->data.mouseMotion.y);
+            }
+        } break;
+
+        case bagE_EventTextUTF8: {
+            printf("text: %s\n", event->data.textUTF8.text);
+        } break;
+
+        case bagE_EventTextUTF32: {
+            printf("codePoint: %x\n", event->data.textUTF32.codePoint);
+        } break;
+
         default: break;
     }
 }
