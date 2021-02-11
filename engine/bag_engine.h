@@ -17,6 +17,10 @@ typedef unsigned long bagE_ModMask;
 
 #define BAGE_TEXT_SIZE 12
 
+/* TODO
+ * - static functionality enabling
+ * - dynamic functionality enabling
+ */
 
 typedef enum
 {
