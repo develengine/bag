@@ -12,35 +12,6 @@
 #include <stdlib.h>
 #include <locale.h>
 
-/*
- * [X] void bagE_pollEvents();
- * [X] void bagE_swapBuffers();
- * 
- * [X] int bagE_getCursorPosition(int *x, int *y);
- * [X] void bagE_getWindowSize(int *width, int *height);
- * 
- * [X] int bagE_isAdaptiveVsyncAvailable(void);
- * 
- * [X] int bagE_setHiddenCursor(int value);
- * [X] void bagE_setFullscreen(int value);
- * [X] void bagE_setWindowTitle(char *value);
- * [X] void bagE_setSwapInterval(int value);
- * [X] void bagE_setCursorPosition(int x, int y);
- *
- * [X] bagE_EventWindowClose,
- * [X] bagE_EventWindowResize,
- *
- * [X] bagE_EventMouseMotion,
- * [X] bagE_EventMouseButtonUp,
- * [X] bagE_EventMouseButtonDown,
- * [X] bagE_EventMouseWheel,
- * [X] bagE_EventMousePosition,
- *
- * [X] bagE_EventKeyUp,
- * [X] bagE_EventKeyDown,
- * [ ] bagE_EventTextUTF8,
- * [ ] bagE_EventTextUTF32,
- */
 
 #define GLX_CONTEXT_MAJOR_VERSION_ARB 0x2091
 #define GLX_CONTEXT_MINOR_VERSION_ARB 0x2092
@@ -497,11 +468,136 @@ static unsigned int bagX11_UTF8ToUTF32(unsigned char *s)
 }
 
 
+static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
+{
+    bagE_Event *event = events;
+
+    switch (xevent->type)
+    {
+        case MappingNotify:
+            XRefreshKeyboardMapping(&(xevent->xmapping));
+            break;
+
+        case ClientMessage:
+            if ((unsigned int)(xevent->xclient.data.l[0]) == bagX11.WM_DELETE_WINDOW)
+                event->type = bagE_EventWindowClose;
+            break;
+
+        case Expose: {
+            if (xevent->xexpose.count != 0)
+                break;
+
+            event->type = bagE_EventWindowResize;
+            event->data.windowResize.width = xevent->xexpose.width;
+            event->data.windowResize.height = xevent->xexpose.height;
+        } break;
+
+        case KeyPress:
+        case KeyRelease: {
+            KeySym keySym = XkbKeycodeToKeysym(bagX11.display, xevent->xkey.keycode, 0, 0);
+
+            if (keySym != NoSymbol) {
+                event->type = xevent->type == KeyPress ? bagE_EventKeyDown : bagE_EventKeyUp;
+                event->data.key.modifiers = bagX11_convertModMask(xevent->xkey.state);
+                event->data.key.buttons = bagX11_convertButtonMask(xevent->xkey.state);
+                event->data.key.key = keySym;
+            }
+
+            if (!XFilterEvent(xevent, None)) {
+                KeySym retKeySym;
+                Status retStatus;
+                int retSize = Xutf8LookupString(
+                        bagX11.inputClient,
+                        &xevent->xkey,
+                        (char *)event[1].data.textUTF8.text,
+                        BAGE_TEXT_SIZE,
+                        &retKeySym,
+                        &retStatus
+                );
+
+                if (retSize > 0) {
+                    events[1].type = bagE_EventTextUTF8;
+                    events[2].type = bagE_EventTextUTF32;
+
+                    unsigned int codePoint = bagX11_UTF8ToUTF32(event[1].data.textUTF8.text);
+
+                    if (codePoint != 0)
+                        events[2].data.textUTF32.codePoint = codePoint;
+                }
+            }
+        } break;
+
+        case ButtonPress:
+        case ButtonRelease: {
+            int buttonCode = xevent->xbutton.button;
+
+            if (buttonCode == 4 || buttonCode == 5) {
+                if (xevent->type == ButtonRelease)
+                    break;
+
+                event->type = bagE_EventMouseWheel;
+                event->data.mouseWheel.scrollUp = buttonCode == 4 ? 1 :-1;
+                event->data.mouseWheel.modifiers = bagX11_convertModMask(xevent->xbutton.state);
+                event->data.mouseWheel.buttons = bagX11_convertButtonMask(xevent->xbutton.state);
+                event->data.mouseWheel.x = xevent->xbutton.x;
+                event->data.mouseWheel.y = xevent->xbutton.y;
+            } else {
+                if (buttonCode < 4) {
+                    bagE_Button options[] = {
+                        bagE_ButtonLeft,
+                        bagE_ButtonMiddle,
+                        bagE_ButtonRight
+                    };
+                    event->data.mouseButton.button = options[buttonCode - 1];
+                } else
+                    event->data.mouseButton.button = buttonCode;
+
+                event->type = xevent->type == ButtonPress ? bagE_EventMouseButtonDown
+                                                         : bagE_EventMouseButtonUp;
+                event->data.mouseButton.modifiers = bagX11_convertModMask(xevent->xbutton.state);
+                event->data.mouseButton.buttons = bagX11_convertButtonMask(xevent->xbutton.state);
+                event->data.mouseButton.x = xevent->xbutton.x;
+                event->data.mouseButton.y = xevent->xbutton.y;
+            }
+        } break;
+
+        case MotionNotify:
+            event->type = bagE_EventMousePosition;
+            event->data.mouse.modifiers = bagX11_convertModMask(xevent->xmotion.state);
+            event->data.mouse.buttons = bagX11_convertButtonMask(xevent->xmotion.state);
+            event->data.mouse.x = xevent->xmotion.x;
+            event->data.mouse.y = xevent->xmotion.y;
+            break;
+
+        case GenericEvent:
+            if (xevent->xcookie.extension == bagX11.xiOpCode
+             && XGetEventData(bagX11.display, &xevent->xcookie)
+             && xevent->xcookie.evtype == XI_RawMotion
+            ) {
+                XIRawEvent* rawEvent = (XIRawEvent*)xevent->xcookie.data;
+
+                if (rawEvent->valuators.mask_len) {
+                    event->data.mouseMotion.x = 0;
+                    event->data.mouseMotion.y = 0;
+
+                    if (XIMaskIsSet(rawEvent->valuators.mask, 0))
+                        event->data.mouseMotion.x = (int)rawEvent->raw_values[0];
+                    if (XIMaskIsSet(rawEvent->valuators.mask, 1))
+                        event->data.mouseMotion.y = (int)rawEvent->raw_values[1];
+
+                    if (event->data.mouseMotion.x != 0 || event->data.mouseMotion.y != 0)
+                        event->type = bagE_EventMouseMotion;
+                }
+            }
+            break;
+    }
+}
+
+
 void bagE_pollEvents()
 {
     XEvent xevent;
     bagE_Event events[3];
-    bagE_Event *event = events;
 
     XEventsQueued(bagX11.display, QueuedAfterFlush);
 
@@ -511,129 +607,15 @@ void bagE_pollEvents()
         for (int i = 0; i < 3; i++)
             events[i].type = bagE_EventNone;
 
-        switch (xevent.type)
-        {
-            case MappingNotify: {
-                XRefreshKeyboardMapping(&(xevent.xmapping));
-            } break;
-
-            case ClientMessage: {
-                if ((unsigned int)(xevent.xclient.data.l[0]) == bagX11.WM_DELETE_WINDOW)
-                    event->type = bagE_EventWindowClose;
-            } break;
-
-            case Expose: {
-                if (xevent.xexpose.count != 0)
-                    break;
-
-                event->type = bagE_EventWindowResize;
-                event->data.windowResize.width = xevent.xexpose.width;
-                event->data.windowResize.height = xevent.xexpose.height;
-            } break;
-
-            case KeyPress:
-            case KeyRelease: {
-                KeySym keySym = XkbKeycodeToKeysym(bagX11.display, xevent.xkey.keycode, 0, 0);
-
-                if (keySym != NoSymbol) {
-                    event->type = xevent.type == KeyPress ? bagE_EventKeyDown : bagE_EventKeyUp;
-                    event->data.key.modifiers = bagX11_convertModMask(xevent.xkey.state);
-                    event->data.key.buttons = bagX11_convertButtonMask(xevent.xkey.state);
-                    event->data.key.key = keySym;
-                }
-
-                if (!XFilterEvent(&xevent, None)) {
-                    KeySym retKeySym;
-                    Status retStatus;
-                    int retSize = Xutf8LookupString(
-                            bagX11.inputClient,
-                            &xevent.xkey,
-                            (char *)event[1].data.textUTF8.text,
-                            BAGE_TEXT_SIZE,
-                            &retKeySym,
-                            &retStatus
-                    );
-
-                    if (retSize > 0) {
-                        events[1].type = bagE_EventTextUTF8;
-                        events[2].type = bagE_EventTextUTF32;
-
-                        unsigned int codePoint = bagX11_UTF8ToUTF32(event[1].data.textUTF8.text);
-
-                        if (codePoint != 0)
-                            events[2].data.textUTF32.codePoint = codePoint;
-                    }
-                }
-            } break;
-
-            case ButtonPress:
-            case ButtonRelease: {
-                int buttonCode = xevent.xbutton.button;
-
-                if (buttonCode == 4 || buttonCode == 5) {
-                    if (xevent.type == ButtonRelease)
-                        break;
-
-                    event->type = bagE_EventMouseWheel;
-                    event->data.mouseWheel.scrollUp = buttonCode == 4 ? 1 :-1;
-                    event->data.mouseWheel.modifiers = bagX11_convertModMask(xevent.xbutton.state);
-                    event->data.mouseWheel.buttons = bagX11_convertButtonMask(xevent.xbutton.state);
-                    event->data.mouseWheel.x = xevent.xbutton.x;
-                    event->data.mouseWheel.y = xevent.xbutton.y;
-                } else {
-                    if (buttonCode < 4) {
-                        bagE_Button options[] = {
-                            bagE_ButtonLeft,
-                            bagE_ButtonMiddle,
-                            bagE_ButtonRight
-                        };
-                        event->data.mouseButton.button = options[buttonCode - 1];
-                    } else
-                        event->data.mouseButton.button = buttonCode;
-
-                    event->type = xevent.type == ButtonPress ? bagE_EventMouseButtonDown
-                                                             : bagE_EventMouseButtonUp;
-                    event->data.mouseButton.modifiers = bagX11_convertModMask(xevent.xbutton.state);
-                    event->data.mouseButton.buttons = bagX11_convertButtonMask(xevent.xbutton.state);
-                    event->data.mouseButton.x = xevent.xbutton.x;
-                    event->data.mouseButton.y = xevent.xbutton.y;
-                }
-            } break;
-
-            case MotionNotify: {
-                event->type = bagE_EventMousePosition;
-                event->data.mouse.modifiers = bagX11_convertModMask(xevent.xmotion.state);
-                event->data.mouse.buttons = bagX11_convertButtonMask(xevent.xmotion.state);
-                event->data.mouse.x = xevent.xmotion.x;
-                event->data.mouse.y = xevent.xmotion.y;
-            } break;
-
-            case GenericEvent: {
-                if (xevent.xcookie.extension == bagX11.xiOpCode
-                 && XGetEventData(bagX11.display, &xevent.xcookie)
-                 && xevent.xcookie.evtype == XI_RawMotion
-                ) {
-                    XIRawEvent* rawEvent = (XIRawEvent*)xevent.xcookie.data;
-
-                    if (rawEvent->valuators.mask_len) {
-                        event->data.mouseMotion.x = 0;
-                        event->data.mouseMotion.y = 0;
-
-                        if (XIMaskIsSet(rawEvent->valuators.mask, 0))
-                            event->data.mouseMotion.x = (int)rawEvent->raw_values[0];
-                        if (XIMaskIsSet(rawEvent->valuators.mask, 1))
-                            event->data.mouseMotion.y = (int)rawEvent->raw_values[1];
-
-                        if (event->data.mouseMotion.x != 0 || event->data.mouseMotion.y != 0)
-                            event->type = bagE_EventMouseMotion;
-                    }
-                }
-            } break;
-        }
+        bagX11_translateEvent(events, &xevent);
 
         for (int i = 0; i < 3; i++) {
-            if (events[i].type != bagE_EventNone)
-                bagE_eventHandler(events+i);
+            if (events[i].type != bagE_EventNone) {
+                int exit = bagE_eventHandler(events+i);
+
+                if (exit)
+                    return;
+            }
         }
     }
 
@@ -702,7 +684,7 @@ static void bagX11_sendEventToWM(
 ) {
     XEvent event = { ClientMessage };
     event.xclient.window = bagX11.window;
-    event.xclient.format = 32; // Data is 32-bit longs
+    event.xclient.format = 32;
     event.xclient.message_type = type;
     event.xclient.data.l[0] = a;
     event.xclient.data.l[1] = b;

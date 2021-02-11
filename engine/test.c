@@ -72,13 +72,13 @@ void printBin(unsigned int num)
 }
 
 
-void bagE_eventHandler(bagE_Event *event)
+int bagE_eventHandler(bagE_Event *event)
 {
     switch (event->type)
     {
-        case bagE_EventWindowClose: {
+        case bagE_EventWindowClose:
             running = 0;
-        } break;
+            return 1;
 
         case bagE_EventWindowResize: {
             bagE_WindowResize *wr = &(event->data.windowResize);
@@ -114,45 +114,44 @@ void bagE_eventHandler(bagE_Event *event)
             }
         } break;
 
-        case bagE_EventKeyUp: {
-            if (event->data.key.key == KEY_SPACE) {
+        case bagE_EventKeyUp:
+            if (event->data.key.key == KEY_SPACE)
                 printf("space up\n");
-            }
-        } break;
+            break;
         
-        case bagE_EventMouseWheel: {
+        case bagE_EventMouseWheel:
             printf("MODS SCROLL UP: %d\n", event->data.mouseWheel.scrollUp);
-        } break;
+            break;
 
-        case bagE_EventMouseButtonDown: {
+        case bagE_EventMouseButtonDown:
             printf("BUTTON DOWN: %d\n", event->data.mouseButton.button);
-        } break;
+            break;
 
-        case bagE_EventMouseButtonUp: {
+        case bagE_EventMouseButtonUp:
             printf("BUTTON UP: %d\n", event->data.mouseButton.button);
-        } break;
+            break;
 
-        case bagE_EventMousePosition: {
-            if (printAbsolute) {
+        case bagE_EventMousePosition: 
+            if (printAbsolute) 
                 printf("ABSOLUTE X: %3d, Y: %3d\n", event->data.mouse.x, event->data.mouse.y);
-            }
-        } break;
+            break;
 
-        case bagE_EventMouseMotion: {
-            if (printRelative) {
+        case bagE_EventMouseMotion:
+            if (printRelative)
                 printf("RELATIVE X: %.2f, Y: %.2f\n", event->data.mouseMotion.x, event->data.mouseMotion.y);
-            }
-        } break;
+            break;
 
-        case bagE_EventTextUTF8: {
+        case bagE_EventTextUTF8:
             printf("text: %s\n", event->data.textUTF8.text);
-        } break;
+            break;
 
-        case bagE_EventTextUTF32: {
+        case bagE_EventTextUTF32:
             printf("codePoint: %x\n", event->data.textUTF32.codePoint);
-        } break;
+            break;
 
         default: break;
     }
+
+    return 0;
 }
 

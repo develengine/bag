@@ -136,7 +136,7 @@ void bagE_setSwapInterval(int value);
 void bagE_setCursorPosition(int x, int y);
 
 /* User defined */
-void bagE_eventHandler(bagE_Event *event);
+int bagE_eventHandler(bagE_Event *event);
 int bagE_main(int argc, char *argv[]);
 
 #endif
