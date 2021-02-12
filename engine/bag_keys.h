@@ -3,7 +3,8 @@
 
 // TODO Convert virtual keys and x keys to hex
 
-#if 0
+#if 1
+#include <windows.h>
 #define KEY_PAIR(w, x) w
 #else
 #include <X11/Xutil.h>
