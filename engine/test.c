@@ -47,6 +47,9 @@ int bagE_main(int argc, char *argv[])
     while (running) {
         bagE_pollEvents();
 
+        if (!running)
+            break;
+
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
 

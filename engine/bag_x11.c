@@ -27,7 +27,7 @@ typedef void (*GLXSWAPINTERVALEXTPROC)(Display*, GLXDrawable, int);
 GLXSWAPINTERVALEXTPROC glXSwapIntervalEXT = 0;
 
 
-struct bagX11_ProgramStruct
+struct bagX11_Program
 {
     Display *display;
     Window root;
@@ -44,7 +44,7 @@ struct bagX11_ProgramStruct
     XVaNestedList spotlist;
 } bagX11;
 
-typedef struct bagX11_ProgramStruct bagX11_Program;
+typedef struct bagX11_Program bagX11_Program;
 
 
 static int bagX11_ctxErrorOccurred = 0;
@@ -232,17 +232,19 @@ int main(int argc, char *argv[])
 
     bagX11.root = RootWindow(bagX11.display, visualInfo->screen);
 
-    XSetWindowAttributes setWindowAttrs;
-    Colormap colormap;
-    setWindowAttrs.colormap = colormap = XCreateColormap(
+    Colormap colormap = XCreateColormap(
             bagX11.display, 
             bagX11.root,
             visualInfo->visual,
             AllocNone
     );
-    setWindowAttrs.background_pixmap = None;
-    setWindowAttrs.border_pixel = 0;
-    setWindowAttrs.event_mask = StructureNotifyMask;
+
+    XSetWindowAttributes setWindowAttrs = {
+        .colormap = colormap,
+        .background_pixmap = None,
+        .border_pixel = 0,
+        .event_mask = StructureNotifyMask
+    };
 
     bagX11.window = XCreateWindow(
             bagX11.display,
@@ -316,12 +318,12 @@ int main(int argc, char *argv[])
         exit(-1);
     }
 
-    XIEventMask eventMask;
     unsigned char mask[XIMaskLen(XI_RawMotion)] = { 0 };
-
-    eventMask.deviceid = XIAllMasterDevices;
-    eventMask.mask_len = sizeof(mask);
-    eventMask.mask = mask;
+    XIEventMask eventMask = {
+        .deviceid = XIAllMasterDevices,
+        .mask_len = sizeof(mask),
+        .mask = mask
+    };
     XISetMask(mask, XI_RawMotion);
 
     XISelectEvents(bagX11.display, bagX11.root, &eventMask, 1);
@@ -611,7 +613,7 @@ void bagE_pollEvents()
 
         for (int i = 0; i < 3; i++) {
             if (events[i].type != bagE_EventNone) {
-                int exit = bagE_eventHandler(events+i);
+                int exit = bagE_eventHandler(events+i);// merge
 
                 if (exit)
                     return;
