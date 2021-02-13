@@ -28,6 +28,11 @@ void GLAPIENTRY openglCallback(
 
 int bagE_main(int argc, char *argv[])
 {
+    FILE *parameters = fopen("parameters.txt", "w");
+    for (int i = 0; i < argc; i++)
+        fprintf(parameters, "%d: %s\n", i, argv[i]);
+    fclose(parameters);
+
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(openglCallback, 0); 
 
@@ -44,7 +49,12 @@ int bagE_main(int argc, char *argv[])
         if (!running)
             break;
 
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+        glClearColor(
+                (float)(rand() % 256) / 255.f,
+                (float)(rand() % 256) / 255.f,
+                (float)(rand() % 256) / 255.f,
+                1.0f
+        );
         glClear(GL_COLOR_BUFFER_BIT);
 
         bagE_swapBuffers();

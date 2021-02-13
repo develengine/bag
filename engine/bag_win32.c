@@ -7,6 +7,10 @@
 
 #include <stdio.h>
 #include <locale.h>
+#include <wchar.h>
+
+__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
 
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 0;
@@ -97,10 +101,22 @@ int WinMain(
         exit(-1);
     }
 
+    wchar_t windowTitle[256];
+    int errorRet = mbstowcs_s(
+            NULL,
+            windowTitle,
+            256,
+            bagE_defaultTitle,
+            256
+    );
+    if (errorRet) 
+        fprintf(stderr, "Problems converting default window title");
+
+
     bagWIN32.window = CreateWindowExW(
             0,
             windowClass.lpszClassName,
-            L"FIXME",  // FIXME convert mb to wide
+            windowTitle,
             WS_OVERLAPPEDWINDOW | WS_VISIBLE,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -147,31 +163,31 @@ int WinMain(
         .iLayerType = PFD_MAIN_PLANE
     };
 
-    HDC retrievedDC = GetDC(bagWIN32.window);
-    if (!retrievedDC) {
+    bagWIN32.deviceContext = GetDC(bagWIN32.window);
+    if (!bagWIN32.deviceContext) {
         bagWIN32_error("Failed to retrieve device context!");
         exit(-1);
     }
 
-    int pfIndex = ChoosePixelFormat(retrievedDC, &pfd);
+    int pfIndex = ChoosePixelFormat(bagWIN32.deviceContext, &pfd);
     if (pfIndex == 0) {
         bagWIN32_error("Failed to chooe pixel format!");
         exit(-1);
     }
 
-    BOOL bResult = SetPixelFormat(retrievedDC, pfIndex, &pfd);
+    BOOL bResult = SetPixelFormat(bagWIN32.deviceContext, pfIndex, &pfd);
     if (!bResult) {
         bagWIN32_error("Failed to set pixel format!");
         exit(-1);
     }
 
-    HGLRC tContext = wglCreateContext(retrievedDC);
+    HGLRC tContext = wglCreateContext(bagWIN32.deviceContext);
     if (!tContext) {
         bagWIN32_error("Failed to create temporary OpenGL context!");
         exit(-1);
     }
 
-    bResult = wglMakeCurrent(retrievedDC, tContext);
+    bResult = wglMakeCurrent(bagWIN32.deviceContext, tContext);
     if (!bResult) {
         bagWIN32_error("Failed to make tomporary OpenGL context current!");
         exit(-1);
@@ -192,7 +208,7 @@ int WinMain(
         0
     };
 
-    bagWIN32.context = wglCreateContextAttribsARB(retrievedDC, 0, attribs);
+    bagWIN32.context = wglCreateContextAttribsARB(bagWIN32.deviceContext, 0, attribs);
     if (!bagWIN32.context) {
         bagWIN32_error("Failed to create OpenGL context!");
         exit(-1);
@@ -200,9 +216,7 @@ int WinMain(
 
     wglMakeCurrent(NULL, NULL);
     wglDeleteContext(tContext);
-    wglMakeCurrent(retrievedDC, bagWIN32.context);
-
-    ReleaseDC(bagWIN32.window, retrievedDC);
+    wglMakeCurrent(bagWIN32.deviceContext, bagWIN32.context);
 
     if (!gladLoaderLoadGL()) {
         bagWIN32_error("glad failed to load OpenGL!");
@@ -210,17 +224,10 @@ int WinMain(
     }
     bagWIN32.openglLoaded = 1;
 
-    bagWIN32.deviceContext = GetDC(bagWIN32.window);
-
 
     /* Running the main function */
 
-#ifdef BAGE_WINDOWS_CONSOLE
-    int programReturn = bagE_main(argc, argv);
-#else
-    // TODO implement parameters
-    int programReturn = bagE_main(0, NULL);
-#endif
+    int programReturn = bagE_main(__argc, __argv);
 
     ReleaseDC(bagWIN32.window, bagWIN32.deviceContext);
     wglDeleteContext(bagWIN32.context);
