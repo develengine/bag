@@ -50,6 +50,17 @@ int bagE_main(int argc, char *argv[])
     printf("Vendor: %s\nRenderer: %s\nVersion: %s\nShading Language version: %s\n",
         vendorString, rendererString, versionString, shadingLanguageVersionString);
 
+#if 0
+    int extCount;
+    glGetIntegerv(GL_NUM_EXTENSIONS, &extCount);
+    for (int i = 0; i < extCount; i++) {
+        const char *ext = glGetStringi(GL_EXTENSIONS, i);
+        printf("extension %d: %s", i, ext);
+    }
+#endif
+
+    bagE_setWindowTitle("OMEGA L Y L");
+
     while (running) {
         bagE_pollEvents();
 
@@ -90,9 +101,14 @@ int bagE_eventHandler(bagE_Event *event)
             if (event->data.key.key == KEY_P) {
                 int x, y;
                 int ret = bagE_getCursorPosition(&x, &y);
-                printf("x: %d, y: %d, r: %d\n", x, y, ret);
+                printf("cursor x: %d, y: %d, r: %d\n", x, y, ret);
             } else if (event->data.key.key == KEY_ALT_LEFT)
                 altDown = 1;
+            else if (event->data.key.key == KEY_U) {
+                int w, h;
+                bagE_getWindowSize(&w, &h);
+                printf("window w: %d, h: %d\n", w, h);
+            }
             break;
 
         case bagE_EventKeyUp:

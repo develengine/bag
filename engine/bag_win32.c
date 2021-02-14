@@ -9,6 +9,7 @@
 #include <locale.h>
 #include <wchar.h>
 
+// Uses dedicated gpu by default but creates a dll file.
 // __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
 // __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
@@ -17,13 +18,13 @@
  * [X] void bagE_swapBuffers();
  * 
  * [X] int bagE_getCursorPosition(int *x, int *y);
- * [ ] void bagE_getWindowSize(int *width, int *height);
+ * [X] void bagE_getWindowSize(int *width, int *height);
  * 
  * [ ] int bagE_isAdaptiveVsyncAvailable(void);
  * 
  * [ ] int bagE_setHiddenCursor(int value);
  * [ ] void bagE_setFullscreen(int value);
- * [ ] void bagE_setWindowTitle(char *value);
+ * [X] void bagE_setWindowTitle(char *value);
  * [ ] void bagE_setSwapInterval(int value);
  * [ ] void bagE_setCursorPosition(int x, int y);
  *
@@ -385,4 +386,19 @@ int bagE_getCursorPosition(int *x, int *y)
     *y = point.y;
 
     return 1;
+}
+
+
+void bagE_getWindowSize(int *width, int *height)
+{
+    RECT rect;
+    GetClientRect(bagWIN32.window, &rect);
+    *width = rect.right - rect.left;
+    *height = rect.bottom - rect.top;
+}
+
+
+void bagE_setWindowTitle(char *value)
+{
+    SetWindowTextA(bagWIN32.window, value);
 }
