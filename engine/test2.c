@@ -4,10 +4,13 @@
 #include "bag_engine.h"
 #include "bag_keys.h"
 
+#define MODERN_GL 0
+
 
 static int running = 1;
 
 
+#if MODERN_GL
 void GLAPIENTRY openglCallback(
         GLenum source,
         GLenum type,
@@ -24,22 +27,25 @@ void GLAPIENTRY openglCallback(
             type, severity, message
     );
 }
+#endif
 
 
 int bagE_main(int argc, char *argv[])
 {
+#if MODERN_GL
+    glEnable(GL_DEBUG_OUTPUT);
+    glDebugMessageCallback(openglCallback, 0); 
+#endif
+
     FILE *parameters = fopen("parameters.txt", "w");
     for (int i = 0; i < argc; i++)
         fprintf(parameters, "%d: %s\n", i, argv[i]);
     fclose(parameters);
 
-    glEnable(GL_DEBUG_OUTPUT);
-    glDebugMessageCallback(openglCallback, 0); 
-
-    const char *vendorString = (const char *)glGetString(GL_VENDOR);
-    const char *rendererString = (const char *)glGetString(GL_RENDERER);
-    const char *versionString = (const char *)glGetString(GL_VERSION);
-    const char *shadingLanguageVersionString = (const char *)glGetString(GL_SHADING_LANGUAGE_VERSION);
+    const char *vendorString = (const char*)glGetString(GL_VENDOR);
+    const char *rendererString = (const char*)glGetString(GL_RENDERER);
+    const char *versionString = (const char*)glGetString(GL_VERSION);
+    const char *shadingLanguageVersionString = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
     printf("Vendor: %s\nRenderer: %s\nVersion: %s\nShading Language version: %s\n",
         vendorString, rendererString, versionString, shadingLanguageVersionString);
 
@@ -70,6 +76,14 @@ int bagE_eventHandler(bagE_Event *event)
         case bagE_EventWindowClose:
             running = 0;
             return 1;
+
+        case bagE_EventWindowResize:
+            bagE_WindowResize *wr = &(event->data.windowResize);
+            printf("resize w: %d, h: %d\n",
+                    event->data.windowResize.width,
+                    event->data.windowResize.height);
+            glViewport(0, 0, wr->width, wr->height);
+            break;
     }
 
     return 0;

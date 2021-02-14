@@ -9,9 +9,38 @@
 #include <locale.h>
 #include <wchar.h>
 
-__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
-__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+// __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+// __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 
+/*
+ * [X] void bagE_pollEvents();
+ * [X] void bagE_swapBuffers();
+ * 
+ * [ ] int bagE_getCursorPosition(int *x, int *y);
+ * [ ] void bagE_getWindowSize(int *width, int *height);
+ * 
+ * [ ] int bagE_isAdaptiveVsyncAvailable(void);
+ * 
+ * [ ] int bagE_setHiddenCursor(int value);
+ * [ ] void bagE_setFullscreen(int value);
+ * [ ] void bagE_setWindowTitle(char *value);
+ * [ ] void bagE_setSwapInterval(int value);
+ * [ ] void bagE_setCursorPosition(int x, int y);
+ *
+ * [X] bagE_EventWindowClose,
+ * [X] bagE_EventWindowResize,
+ *
+ * [ ] bagE_EventMouseMotion,
+ * [ ] bagE_EventMouseButtonUp,
+ * [ ] bagE_EventMouseButtonDown,
+ * [ ] bagE_EventMouseWheel,
+ * [ ] bagE_EventMousePosition,
+ *
+ * [ ] bagE_EventKeyUp,
+ * [ ] bagE_EventKeyDown,
+ * [ ] bagE_EventTextUTF8,
+ * [ ] bagE_EventTextUTF32,
+ */
 
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 0;
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = 0;
@@ -33,8 +62,10 @@ struct bagWIN32_Program
     HGLRC context;
     HDC deviceContext;
     int openglLoaded;
+    int newContext;
     /* state */
     int processingEvents;
+    int cursorHidden;
 } bagWIN32;
 
 typedef struct bagWIN32_Program bagWIN32_Program;
@@ -133,6 +164,8 @@ int WinMain(
         exit(-1);
     }
 
+    bagWIN32.cursorHidden = 0;
+
     
     /* Raw input */
 
@@ -195,28 +228,31 @@ int WinMain(
 
     int procIndex = -1;
     if ((procIndex = bagWIN32_loadWGLFunctionPointers()) != -1) {
-        fprintf(stderr, "Failed to retrieve function number #d\n", procIndex);
-        bagWIN32_error("Failed to load all WGL extension functions!");
-        exit(-1);
+        fprintf(stderr, "Failed to retrieve function number %d\n", procIndex);
+        // bagWIN32_error("Failed to load all WGL extension functions!");
+        // exit(-1);
+        bagWIN32.context = tContext;
+        bagWIN32.newContext = 0;
+    } else {
+        // TODO: expose to the user
+        int attribs[] = {
+            WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
+            WGL_CONTEXT_MINOR_VERSION_ARB, 4,
+            WGL_CONTEXT_FLAGS_ARB, 0,
+            0
+        };
+    
+        bagWIN32.context = wglCreateContextAttribsARB(bagWIN32.deviceContext, 0, attribs);
+        if (!bagWIN32.context) {
+            bagWIN32_error("Failed to create OpenGL context!");
+            exit(-1);
+        }
+    
+        wglMakeCurrent(NULL, NULL);
+        wglDeleteContext(tContext);
+        wglMakeCurrent(bagWIN32.deviceContext, bagWIN32.context);
+        bagWIN32.newContext = 1;
     }
-
-    // TODO: expose to the user
-    int attribs[] = {
-        WGL_CONTEXT_MAJOR_VERSION_ARB, 4,
-        WGL_CONTEXT_MINOR_VERSION_ARB, 4,
-        WGL_CONTEXT_FLAGS_ARB, 0,
-        0
-    };
-
-    bagWIN32.context = wglCreateContextAttribsARB(bagWIN32.deviceContext, 0, attribs);
-    if (!bagWIN32.context) {
-        bagWIN32_error("Failed to create OpenGL context!");
-        exit(-1);
-    }
-
-    wglMakeCurrent(NULL, NULL);
-    wglDeleteContext(tContext);
-    wglMakeCurrent(bagWIN32.deviceContext, bagWIN32.context);
 
     if (!gladLoaderLoadGL()) {
         bagWIN32_error("glad failed to load OpenGL!");
@@ -242,6 +278,9 @@ LRESULT CALLBACK bagWIN32_windowProc(
         WPARAM wParam,
         LPARAM lParam
 ) {
+    if (!bagWIN32.openglLoaded)
+        return DefWindowProcW(windowHandle, message, wParam, lParam);
+
     LRESULT result = 0;
     bagE_Event events[3];
     bagE_Event *event = events;
@@ -254,6 +293,25 @@ LRESULT CALLBACK bagWIN32_windowProc(
         case WM_CLOSE:
             event->type = bagE_EventWindowClose;
             break;
+
+        case WM_WINDOWPOSCHANGED: {
+            unsigned int winFlags = ((WINDOWPOS*)lParam)->flags;
+
+            if ((winFlags & SWP_NOSIZE) && (winFlags & SWP_NOMOVE))
+                break;
+
+            RECT winRect;
+            GetClientRect(windowHandle, &winRect);
+
+            if (!(winFlags & SWP_NOSIZE)) {
+                event->type = bagE_EventWindowResize;
+                event->data.windowResize.width = winRect.right - winRect.left;
+                event->data.windowResize.height = winRect.bottom - winRect.top;
+            }
+
+            if (bagWIN32.cursorHidden)
+                ClipCursor(&winRect);
+        } break;
 
         default:
             result = DefWindowProcW(windowHandle, message, wParam, lParam);
@@ -297,4 +355,24 @@ void bagE_pollEvents()
 void bagE_swapBuffers()
 {
     SwapBuffers(bagWIN32.deviceContext);
+}
+
+
+int bagE_getCursorPosition(int *x, int *y)
+{
+    POINT point;
+    BOOL ret = GetCursorPos(&point);
+
+    if (!ret)
+        return 0;
+
+    ret = ScreenToClient(bagWIN32.window, &point);
+
+    if (!ret)
+        return 0;
+
+    *x = point.x;
+    *y = point.y;
+
+    return 1;
 }
