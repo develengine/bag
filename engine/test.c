@@ -7,6 +7,7 @@
 static int running = 1;
 static int printAbsolute = 0;
 static int printRelative = 0;
+static int shiftDown = 0;
 
 
 void GLAPIENTRY openglCallback(
@@ -92,10 +93,9 @@ int bagE_eventHandler(bagE_Event *event)
             printf("key down\n");
 
             if (event->data.key.key == KEY_DELETE) {
-                printf("   mods: ");
-                printBin(event->data.key.modifiers);
-                printf("buttons: ");
-                printBin(event->data.key.buttons);
+                printf("delete\n");
+            } else if (event->data.key.key == KEY_SHIFT_LEFT) {
+                shiftDown = 1;
             } else if (event->data.key.key == KEY_U) {
                 int width, height;
                 bagE_getWindowSize(&width, &height);
@@ -105,11 +105,11 @@ int bagE_eventHandler(bagE_Event *event)
             } else if (event->data.key.key == KEY_P) {
                 bagE_setCursorPosition(100, 100);
             } else if (event->data.key.key == KEY_F) {
-                bagE_setFullscreen((event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) == 0);
+                bagE_setFullscreen(shiftDown);
             } else if (event->data.key.key == KEY_C) {
-                bagE_setHiddenCursor((event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) == 0);
+                bagE_setHiddenCursor(shiftDown);
             } else if (event->data.key.key == KEY_M) {
-                if (event->data.key.modifiers & BAGE_MOD_BIT_SHIFT) {
+                if (shiftDown) {
                     printRelative = !printRelative;
                 } else {
                     printAbsolute = !printAbsolute;
@@ -118,8 +118,11 @@ int bagE_eventHandler(bagE_Event *event)
         } break;
 
         case bagE_EventKeyUp:
-            if (event->data.key.key == KEY_SPACE)
+            if (event->data.key.key == KEY_SPACE) {
                 printf("space up\n");
+            } else if (event->data.key.key == KEY_SHIFT_LEFT) {
+                shiftDown = 0;
+            }
             break;
         
         case bagE_EventMouseWheel:

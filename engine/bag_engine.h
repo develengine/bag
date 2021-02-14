@@ -3,18 +3,6 @@
 
 #include <glad/gl.h>
 
-typedef unsigned long bagE_ButtonMask;
-#define BAGE_BUTTON_BIT_LEFT   0x01
-#define BAGE_BUTTON_BIT_MIDDLE 0x02
-#define BAGE_BUTTON_BIT_RIGHT  0x04
-
-typedef unsigned long bagE_ModMask;
-#define BAGE_MOD_BIT_SHIFT   0x01
-#define BAGE_MOD_BIT_CONTROL 0x02
-#define BAGE_MOD_BIT_ALT     0x04
-#define BAGE_MOD_BIT_SUPER   0x08
-#define BAGE_MOD_BIT_LOCK    0x10
-
 #define BAGE_TEXT_SIZE 12
 
 /* TODO
@@ -61,38 +49,28 @@ typedef struct
 
 typedef struct
 {
-    bagE_ButtonMask buttons;
-    bagE_ModMask modifiers;
     int x, y;
 } bagE_Mouse;
 
 typedef struct
 {
-    bagE_ButtonMask buttons;
-    bagE_ModMask modifiers;
     float x, y;
 } bagE_MouseMotion;
 
 typedef struct
 {
-    bagE_ButtonMask buttons;
-    bagE_ModMask modifiers;
     int x, y;
     bagE_Button button;
 } bagE_MouseButton;
 
 typedef struct
 {
-    bagE_ButtonMask buttons;
-    bagE_ModMask modifiers;
     int x, y;
     int scrollUp;
 } bagE_MouseWheel;
 
 typedef struct
 {
-    bagE_ButtonMask buttons;
-    bagE_ModMask modifiers;
     unsigned int key;
 } bagE_Key;
 

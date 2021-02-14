@@ -419,7 +419,7 @@ int main(int argc, char *argv[])
     return programReturn;
 }
 
-
+#if 0
 static bagE_ModMask bagX11_convertModMask(unsigned int state)
 {
     bagE_ModMask modMask = 0;
@@ -444,6 +444,7 @@ static bagE_ButtonMask bagX11_convertButtonMask(unsigned int state)
 
     return buttonMask;
 }
+#endif
 
 
 static unsigned int bagX11_UTF8ToUTF32(unsigned char *s)
@@ -500,8 +501,6 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
 
             if (keySym != NoSymbol) {
                 event->type = xevent->type == KeyPress ? bagE_EventKeyDown : bagE_EventKeyUp;
-                event->data.key.modifiers = bagX11_convertModMask(xevent->xkey.state);
-                event->data.key.buttons = bagX11_convertButtonMask(xevent->xkey.state);
                 event->data.key.key = keySym;
             }
 
@@ -539,8 +538,6 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
 
                 event->type = bagE_EventMouseWheel;
                 event->data.mouseWheel.scrollUp = buttonCode == 4 ? 1 :-1;
-                event->data.mouseWheel.modifiers = bagX11_convertModMask(xevent->xbutton.state);
-                event->data.mouseWheel.buttons = bagX11_convertButtonMask(xevent->xbutton.state);
                 event->data.mouseWheel.x = xevent->xbutton.x;
                 event->data.mouseWheel.y = xevent->xbutton.y;
             } else {
@@ -556,8 +553,6 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
 
                 event->type = xevent->type == ButtonPress ? bagE_EventMouseButtonDown
                                                          : bagE_EventMouseButtonUp;
-                event->data.mouseButton.modifiers = bagX11_convertModMask(xevent->xbutton.state);
-                event->data.mouseButton.buttons = bagX11_convertButtonMask(xevent->xbutton.state);
                 event->data.mouseButton.x = xevent->xbutton.x;
                 event->data.mouseButton.y = xevent->xbutton.y;
             }
@@ -565,8 +560,6 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
 
         case MotionNotify:
             event->type = bagE_EventMousePosition;
-            event->data.mouse.modifiers = bagX11_convertModMask(xevent->xmotion.state);
-            event->data.mouse.buttons = bagX11_convertButtonMask(xevent->xmotion.state);
             event->data.mouse.x = xevent->xmotion.x;
             event->data.mouse.y = xevent->xmotion.y;
             break;
