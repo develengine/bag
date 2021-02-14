@@ -502,6 +502,7 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
             if (keySym != NoSymbol) {
                 event->type = xevent->type == KeyPress ? bagE_EventKeyDown : bagE_EventKeyUp;
                 event->data.key.key = keySym;
+                event->data.key.repeat = 1;
             }
 
             if (!XFilterEvent(xevent, None)) {

@@ -72,6 +72,7 @@ typedef struct
 typedef struct
 {
     unsigned int key;
+    int repeat;
 } bagE_Key;
 
 typedef struct

@@ -16,7 +16,7 @@
  * [X] void bagE_pollEvents();
  * [X] void bagE_swapBuffers();
  * 
- * [ ] int bagE_getCursorPosition(int *x, int *y);
+ * [X] int bagE_getCursorPosition(int *x, int *y);
  * [ ] void bagE_getWindowSize(int *width, int *height);
  * 
  * [ ] int bagE_isAdaptiveVsyncAvailable(void);
@@ -36,8 +36,8 @@
  * [ ] bagE_EventMouseWheel,
  * [ ] bagE_EventMousePosition,
  *
- * [ ] bagE_EventKeyUp,
- * [ ] bagE_EventKeyDown,
+ * [X] bagE_EventKeyUp,
+ * [X] bagE_EventKeyDown,
  * [ ] bagE_EventTextUTF8,
  * [ ] bagE_EventTextUTF32,
  */
@@ -311,6 +311,16 @@ LRESULT CALLBACK bagWIN32_windowProc(
 
             if (bagWIN32.cursorHidden)
                 ClipCursor(&winRect);
+        } break;
+
+        case WM_KEYDOWN:
+        case WM_SYSKEYDOWN:
+        case WM_KEYUP:
+        case WM_SYSKEYUP: {
+            event->type = message == WM_KEYDOWN || message == WM_SYSKEYDOWN
+                        ? bagE_EventKeyDown : bagE_EventKeyUp;
+            event->data.key.key = wParam;
+            event->data.key.repeat = lParam & 0xFF;
         } break;
 
         default:

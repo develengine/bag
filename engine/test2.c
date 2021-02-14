@@ -8,6 +8,7 @@
 
 
 static int running = 1;
+static int altDown = 0;
 
 
 #if MODERN_GL
@@ -77,12 +78,32 @@ int bagE_eventHandler(bagE_Event *event)
             running = 0;
             return 1;
 
-        case bagE_EventWindowResize:
+        case bagE_EventWindowResize: {
             bagE_WindowResize *wr = &(event->data.windowResize);
             printf("resize w: %d, h: %d\n",
                     event->data.windowResize.width,
                     event->data.windowResize.height);
             glViewport(0, 0, wr->width, wr->height);
+        } break;
+
+        case bagE_EventKeyDown:
+            if (event->data.key.key == KEY_P) {
+                int x, y;
+                int ret = bagE_getCursorPosition(&x, &y);
+                printf("x: %d, y: %d, r: %d\n", x, y, ret);
+            } else if (event->data.key.key == KEY_ALT_LEFT)
+                altDown = 1;
+            break;
+
+        case bagE_EventKeyUp:
+            if (event->data.key.key == KEY_SPACE)
+                printf("Space up\n");
+            else if (event->data.key.key == KEY_ALT_LEFT)
+                altDown = 0;
+            else if (event->data.key.key == KEY_F4) {
+                if (altDown)
+                    printf("just alt f4Head\n");
+            }
             break;
     }
 
