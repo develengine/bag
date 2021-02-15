@@ -23,7 +23,7 @@
  * [ ] int bagE_isAdaptiveVsyncAvailable(void);
  * 
  * [ ] int bagE_setHiddenCursor(int value);
- * [ ] void bagE_setFullscreen(int value);
+ * [X] void bagE_setFullscreen(int value);
  * [X] void bagE_setWindowTitle(char *value);
  * [ ] void bagE_setSwapInterval(int value);
  * [ ] void bagE_setCursorPosition(int x, int y);
@@ -67,6 +67,7 @@ struct bagWIN32_Program
     /* state */
     int processingEvents;
     int cursorHidden;
+    WINDOWPLACEMENT previousWP;
 } bagWIN32;
 
 typedef struct bagWIN32_Program bagWIN32_Program;
@@ -166,6 +167,7 @@ int WinMain(
     }
 
     bagWIN32.cursorHidden = 0;
+    bagWIN32.previousWP.length = sizeof(bagWIN32.previousWP);
 
     
     /* Raw input */
@@ -401,4 +403,39 @@ void bagE_getWindowSize(int *width, int *height)
 void bagE_setWindowTitle(char *value)
 {
     SetWindowTextA(bagWIN32.window, value);
+}
+
+
+WINDOWPLACEMENT previousWP = { sizeof(previousWP) };
+
+void bagE_setFullscreen(int value)
+{
+    DWORD style = GetWindowLong(bagWIN32.window, GWL_STYLE);
+    int isOverlapped = style & WS_OVERLAPPEDWINDOW;
+
+    if (isOverlapped && value) {
+        MONITORINFO monitorInfo = { sizeof(monitorInfo) };
+
+        if (GetWindowPlacement(bagWIN32.window, &previousWP) &&
+                GetMonitorInfo(MonitorFromWindow(bagWIN32.window, MONITOR_DEFAULTTOPRIMARY),
+                    &monitorInfo)
+        ) {
+            SetWindowLong(bagWIN32.window, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
+            SetWindowPos(bagWIN32.window, HWND_TOP,
+                    monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+                    monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
+                    monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
+                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+        }
+
+        return;
+    }
+
+    if (!(isOverlapped || value)) {
+        SetWindowLong(bagWIN32.window, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
+        SetWindowPlacement(bagWIN32.window, &previousWP);
+        SetWindowPos(bagWIN32.window, NULL, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
+                SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+    }
 }

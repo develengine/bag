@@ -9,6 +9,7 @@
 
 static int running = 1;
 static int altDown = 0;
+static int shiftDown = 0;
 
 
 #if MODERN_GL
@@ -104,10 +105,15 @@ int bagE_eventHandler(bagE_Event *event)
                 printf("cursor x: %d, y: %d, r: %d\n", x, y, ret);
             } else if (event->data.key.key == KEY_ALT_LEFT)
                 altDown = 1;
+            else if (event->data.key.key == KEY_SHIFT_LEFT)
+                shiftDown = 1;
             else if (event->data.key.key == KEY_U) {
                 int w, h;
                 bagE_getWindowSize(&w, &h);
                 printf("window w: %d, h: %d\n", w, h);
+            } else if (event->data.key.key == KEY_F) {
+                bagE_setFullscreen(shiftDown);
+                printf("yep\n");
             }
             break;
 
@@ -116,6 +122,8 @@ int bagE_eventHandler(bagE_Event *event)
                 printf("Space up\n");
             else if (event->data.key.key == KEY_ALT_LEFT)
                 altDown = 0;
+            else if (event->data.key.key == KEY_SHIFT_LEFT)
+                shiftDown = 0;
             else if (event->data.key.key == KEY_F4) {
                 if (altDown)
                     printf("just alt f4Head\n");
