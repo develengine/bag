@@ -10,6 +10,8 @@
 static int running = 1;
 static int altDown = 0;
 static int shiftDown = 0;
+static int printRel = 0;
+static int printAbs = 0;
 
 
 #if MODERN_GL
@@ -113,7 +115,17 @@ int bagE_eventHandler(bagE_Event *event)
                 printf("window w: %d, h: %d\n", w, h);
             } else if (event->data.key.key == KEY_F) {
                 bagE_setFullscreen(shiftDown);
-                printf("yep\n");
+            } else if (event->data.key.key == KEY_C) {
+                bagE_setHiddenCursor(shiftDown);
+            } else if (event->data.key.key == KEY_I) {
+                bagE_setCursorPosition(100, 100);
+                printf("oh nyoo\n");
+            } else if (event->data.key.key == KEY_M) {
+                if (shiftDown) {
+                    printRel = !printRel;
+                } else {
+                    printAbs = !printAbs;
+                }
             }
             break;
 
@@ -128,6 +140,11 @@ int bagE_eventHandler(bagE_Event *event)
                 if (altDown)
                     printf("just alt f4Head\n");
             }
+            break;
+
+        case bagE_EventMousePosition:
+            if (printAbs)
+                printf("abs x: %d, y: %d\n", event->data.mouse.x, event->data.mouse.y);
             break;
     }
 

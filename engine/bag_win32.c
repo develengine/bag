@@ -22,11 +22,11 @@
  * 
  * [ ] int bagE_isAdaptiveVsyncAvailable(void);
  * 
- * [ ] int bagE_setHiddenCursor(int value);
+ * [X] int bagE_setHiddenCursor(int value);
  * [X] void bagE_setFullscreen(int value);
  * [X] void bagE_setWindowTitle(char *value);
  * [ ] void bagE_setSwapInterval(int value);
- * [ ] void bagE_setCursorPosition(int x, int y);
+ * [X] void bagE_setCursorPosition(int x, int y);
  *
  * [X] bagE_EventWindowClose,
  * [X] bagE_EventWindowResize,
@@ -42,6 +42,12 @@
  * [ ] bagE_EventTextUTF8,
  * [ ] bagE_EventTextUTF32,
  */
+
+/* FIXME 
+ * can't change keyboard language when window selected
+ * cursor doesn't update to arrow when hower over client area
+ */
+
 
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 0;
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = 0;
@@ -326,6 +332,12 @@ LRESULT CALLBACK bagWIN32_windowProc(
             event->data.key.repeat = lParam & 0xFF;
         } break;
 
+        case WM_MOUSEMOVE:
+            event->type = bagE_EventMousePosition;
+            event->data.mouse.x = (signed short)(lParam & 0xFFFF);
+            event->data.mouse.y = (signed short)(lParam >> 16);
+            break;
+
         default:
             result = DefWindowProcW(windowHandle, message, wParam, lParam);
     }
@@ -406,8 +418,6 @@ void bagE_setWindowTitle(char *value)
 }
 
 
-WINDOWPLACEMENT previousWP = { sizeof(previousWP) };
-
 void bagE_setFullscreen(int value)
 {
     DWORD style = GetWindowLong(bagWIN32.window, GWL_STYLE);
@@ -416,26 +426,60 @@ void bagE_setFullscreen(int value)
     if (isOverlapped && value) {
         MONITORINFO monitorInfo = { sizeof(monitorInfo) };
 
-        if (GetWindowPlacement(bagWIN32.window, &previousWP) &&
-                GetMonitorInfo(MonitorFromWindow(bagWIN32.window, MONITOR_DEFAULTTOPRIMARY),
-                    &monitorInfo)
+        if (GetWindowPlacement(bagWIN32.window, &bagWIN32.previousWP) &&
+                GetMonitorInfo(
+                        MonitorFromWindow(bagWIN32.window, MONITOR_DEFAULTTOPRIMARY),
+                        &monitorInfo
+                )
         ) {
             SetWindowLong(bagWIN32.window, GWL_STYLE, style & ~WS_OVERLAPPEDWINDOW);
-            SetWindowPos(bagWIN32.window, HWND_TOP,
-                    monitorInfo.rcMonitor.left, monitorInfo.rcMonitor.top,
+            SetWindowPos(
+                    bagWIN32.window,
+                    HWND_TOP,
+                    monitorInfo.rcMonitor.left,
+                    monitorInfo.rcMonitor.top,
                     monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
                     monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                    SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+            );
         }
-
-        return;
-    }
-
-    if (!(isOverlapped || value)) {
+    } else if (!(isOverlapped || value)) {
         SetWindowLong(bagWIN32.window, GWL_STYLE, style | WS_OVERLAPPEDWINDOW);
-        SetWindowPlacement(bagWIN32.window, &previousWP);
-        SetWindowPos(bagWIN32.window, NULL, 0, 0, 0, 0,
+        SetWindowPlacement(bagWIN32.window, &bagWIN32.previousWP);
+        SetWindowPos(
+                bagWIN32.window,
+                NULL, 0, 0, 0, 0,
                 SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER |
-                SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
+                SWP_NOOWNERZORDER | SWP_FRAMECHANGED
+        );
     }
+}
+
+
+int bagE_setHiddenCursor(int value)
+{
+    if (!bagWIN32.cursorHidden && value) {
+        RECT windowRect;
+        GetClientRect(bagWIN32.window, &windowRect);
+        ClientToScreen(bagWIN32.window, (POINT*)&windowRect.left);
+        ClientToScreen(bagWIN32.window, (POINT*)&windowRect.right);
+
+        bagWIN32.cursorHidden = 1;
+        ClipCursor(&windowRect);
+        SetCursor(NULL);
+    } else if (bagWIN32.cursorHidden && !value) {
+        bagWIN32.cursorHidden = 0;
+        ClipCursor(NULL);
+        SetCursor(LoadCursor(NULL, IDC_ARROW));
+    }
+
+    return 1;
+}
+
+
+void bagE_setCursorPosition(int x, int y)
+{
+    POINT point = { x, y };
+    ClientToScreen(bagWIN32.window, &point);
+    SetCursorPos(point.x, point.y);
 }
