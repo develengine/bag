@@ -31,7 +31,7 @@
  * [X] bagE_EventWindowClose,
  * [X] bagE_EventWindowResize,
  *
- * [ ] bagE_EventMouseMotion,
+ * [X] bagE_EventMouseMotion,
  * [ ] bagE_EventMouseButtonUp,
  * [ ] bagE_EventMouseButtonDown,
  * [ ] bagE_EventMouseWheel,
@@ -336,6 +336,34 @@ LRESULT CALLBACK bagWIN32_windowProc(
             event->type = bagE_EventMousePosition;
             event->data.mouse.x = (signed short)(lParam & 0xFFFF);
             event->data.mouse.y = (signed short)(lParam >> 16);
+            break;
+
+        case WM_LBUTTONUP:
+            event->data.mouseButton.button = bagE_ButtonLeft;
+            goto buttonup;
+        case WM_MBUTTONUP:
+            event->data.mouseButton.button = bagE_ButtonMiddle;
+            goto buttonup;
+        case WM_RBUTTONUP:
+            event->data.mouseButton.button = bagE_ButtonRight;
+        buttonup:
+            event->type = bagE_EventMouseButtonUp;
+            goto casefin;
+
+        case WM_LBUTTONDOWN:
+            event->data.mouseButton.button = bagE_ButtonLeft;
+            goto buttondown;
+        case WM_MBUTTONDOWN:
+            event->data.mouseButton.button = bagE_ButtonMiddle;
+            goto buttondown;
+        case WM_RBUTTONDOWN:
+            event->data.mouseButton.button = bagE_ButtonRight;
+        buttondown:
+            event->type = bagE_EventMouseButtonDown;
+
+        casefin:
+            event->data.mouseButton.x = (signed short)(lParam & 0xFFFF);
+            event->data.mouseButton.y = (signed short)(lParam >> 16);
             break;
 
         default:

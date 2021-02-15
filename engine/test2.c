@@ -146,6 +146,20 @@ int bagE_eventHandler(bagE_Event *event)
             if (printAbs)
                 printf("abs x: %d, y: %d\n", event->data.mouse.x, event->data.mouse.y);
             break;
+
+        case bagE_EventMouseButtonDown:
+            printf("down: %d, x: %d, y: %d\n",
+                    event->data.mouseButton.button,
+                    event->data.mouseButton.x,
+                    event->data.mouseButton.y);
+            break;
+
+        case bagE_EventMouseButtonUp:
+            printf("up: %d, x: %d, y: %d\n",
+                    event->data.mouseButton.button,
+                    event->data.mouseButton.x,
+                    event->data.mouseButton.y);
+            break;
     }
 
     return 0;
