@@ -160,6 +160,13 @@ int bagE_eventHandler(bagE_Event *event)
                     event->data.mouseButton.x,
                     event->data.mouseButton.y);
             break;
+
+        case bagE_EventMouseWheel:
+            printf("wheel: %d, x: %d, y: %d\n",
+                    event->data.mouseWheel.scrollUp,
+                    event->data.mouseWheel.x,
+                    event->data.mouseWheel.y);
+            break;
     }
 
     return 0;

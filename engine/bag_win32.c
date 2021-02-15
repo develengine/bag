@@ -31,11 +31,11 @@
  * [X] bagE_EventWindowClose,
  * [X] bagE_EventWindowResize,
  *
- * [X] bagE_EventMouseMotion,
- * [ ] bagE_EventMouseButtonUp,
- * [ ] bagE_EventMouseButtonDown,
+ * [ ] bagE_EventMouseMotion,
+ * [X] bagE_EventMouseButtonUp,
+ * [X] bagE_EventMouseButtonDown,
  * [ ] bagE_EventMouseWheel,
- * [ ] bagE_EventMousePosition,
+ * [X] bagE_EventMousePosition,
  *
  * [X] bagE_EventKeyUp,
  * [X] bagE_EventKeyDown,
@@ -348,7 +348,7 @@ LRESULT CALLBACK bagWIN32_windowProc(
             event->data.mouseButton.button = bagE_ButtonRight;
         buttonup:
             event->type = bagE_EventMouseButtonUp;
-            goto casefin;
+            goto buttonall;
 
         case WM_LBUTTONDOWN:
             event->data.mouseButton.button = bagE_ButtonLeft;
@@ -361,9 +361,16 @@ LRESULT CALLBACK bagWIN32_windowProc(
         buttondown:
             event->type = bagE_EventMouseButtonDown;
 
-        casefin:
+        buttonall:
             event->data.mouseButton.x = (signed short)(lParam & 0xFFFF);
             event->data.mouseButton.y = (signed short)(lParam >> 16);
+            break;
+
+        case WM_MOUSEWHEEL:
+            event->type = bagE_EventMouseWheel;
+            event->data.mouseWheel.scrollUp = ((signed short)(wParam >> 16)) / 120;
+            event->data.mouseWheel.x = (signed short)(lParam & 0xFFFF);
+            event->data.mouseWheel.y = (signed short)(lParam >> 16);
             break;
 
         default:
