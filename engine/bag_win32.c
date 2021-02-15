@@ -34,7 +34,7 @@
  * [ ] bagE_EventMouseMotion,
  * [X] bagE_EventMouseButtonUp,
  * [X] bagE_EventMouseButtonDown,
- * [ ] bagE_EventMouseWheel,
+ * [X] bagE_EventMouseWheel,
  * [X] bagE_EventMousePosition,
  *
  * [X] bagE_EventKeyUp,
