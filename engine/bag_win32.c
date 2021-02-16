@@ -35,8 +35,8 @@
  *
  * [X] bagE_EventKeyUp,
  * [X] bagE_EventKeyDown,
- * [ ] bagE_EventTextUTF8,
- * [ ] bagE_EventTextUTF32,
+ * [X] bagE_EventTextUTF8,
+ * [X] bagE_EventTextUTF32,
  */
 
 /* FIXME 
@@ -78,6 +78,7 @@ struct bagWIN32_Program
     int cursorHidden;
     int prevX, prevY;
     WINDOWPLACEMENT previousWP;
+    int highSurrogate;
 } bagWIN32;
 
 typedef struct bagWIN32_Program bagWIN32_Program;
@@ -287,20 +288,50 @@ int WinMain(
 }
 
 
+int bagWIN32_utf8FromCodePoint(unsigned int codePoint, unsigned char string[]) {
+    if (codePoint < 0x80) {
+        string[0] = (unsigned char)codePoint;
+        return 1;
+    }
+    if (codePoint < 0x800) {
+        string[0] = (unsigned char)(0xC0 | (codePoint >> 6));
+        string[1] = (unsigned char)(0x80 | (codePoint & 0x3F));
+        return 2;
+    }
+    if (codePoint < 0x10000) {
+        string[0] = (unsigned char)(0xE0 | (codePoint >> 12));
+        string[1] = (unsigned char)(0x80 | ((codePoint >> 6) & 0x3F));
+        string[2] = (unsigned char)(0x80 | (codePoint & 0x3F));
+        return 3;
+    }
+    if (codePoint < 0x110000) {
+        string[0] = (unsigned char)(0xF0 | (codePoint >> 18));
+        string[1] = (unsigned char)(0x80 | ((codePoint >> 12) & 0x3F));
+        string[2] = (unsigned char)(0x80 | ((codePoint >> 6) & 0x3F));
+        string[3] = (unsigned char)(0x80 | (codePoint & 0x3F));
+        return 4;
+    }
+
+    return 0;
+}
+
+
 LRESULT CALLBACK bagWIN32_windowProc(
         HWND windowHandle,
         UINT message,
         WPARAM wParam,
         LPARAM lParam
 ) {
+    #define BAGWIN32_EVENT_COUNT 2
+
     if (!bagWIN32.openglLoaded)
         return DefWindowProcW(windowHandle, message, wParam, lParam);
 
     LRESULT result = 0;
-    bagE_Event events[3];
+    bagE_Event events[BAGWIN32_EVENT_COUNT];
     bagE_Event *event = events;
 
-    for (int i = 0; i < 3; i++)
+    for (int i = 0; i < BAGWIN32_EVENT_COUNT; i++)
         events[i].type = bagE_EventNone;
 
     switch (message)
@@ -423,11 +454,33 @@ LRESULT CALLBACK bagWIN32_windowProc(
             free(rawData);
         } break;
 
+        case WM_CHAR:
+        case WM_SYSCHAR: {
+            int utfVal = 0;
+
+            if (bagWIN32.highSurrogate) {
+                utfVal = (wParam & 0x3FF) | ((bagWIN32.highSurrogate & 0x3FF) << 10);
+                bagWIN32.highSurrogate = 0;
+            } else if ((int)wParam >= 0xD800 && (int)wParam <= 0xDBFF) {
+                bagWIN32.highSurrogate = wParam;
+                break;
+            } else {
+                utfVal = wParam;
+            }
+
+            event->type = bagE_EventTextUTF32;
+            event->data.textUTF32.codePoint = utfVal;
+
+            events[1].type = bagE_EventTextUTF8;
+            int length = bagWIN32_utf8FromCodePoint(utfVal, events[1].data.textUTF8.text);
+            events[1].data.textUTF8.text[length] = 0;
+        } break;
+
         default:
             result = DefWindowProcW(windowHandle, message, wParam, lParam);
     }
 
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < BAGWIN32_EVENT_COUNT; i++) {
         if (events[i].type != bagE_EventNone) {
             if (bagE_eventHandler(events+i))
                 bagWIN32.processingEvents = 0;

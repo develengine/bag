@@ -175,6 +175,18 @@ int bagE_eventHandler(bagE_Event *event)
                     event->data.mouseMotion.y);
             }
             break;
+
+        case bagE_EventTextUTF32:
+            printf("codepoint: %x\n", event->data.textUTF32.codePoint);
+            break;
+
+        case bagE_EventTextUTF8: {
+            int i = 0;
+            printf("utf8: ");
+            while (event->data.textUTF8.text[i] != 0)
+                printf("%x ", event->data.textUTF8.text[i++]);
+            printf("\n");
+        } break;
     }
 
     return 0;

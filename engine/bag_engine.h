@@ -6,8 +6,9 @@
 #define BAGE_TEXT_SIZE 12
 
 /* TODO
- * - static functionality enabling
- * - dynamic functionality enabling
+ * [ ] static functionality enabling
+ * [ ] dynamic functionality enabling
+ * [ ] opengl version selection
  */
 
 typedef enum

@@ -592,20 +592,21 @@ static void bagX11_translateEvent(bagE_Event *events, XEvent *xevent)
 
 void bagE_pollEvents()
 {
+    #define BAGX11_EVENT_COUNT 3
     XEvent xevent;
-    bagE_Event events[3];
+    bagE_Event events[BAGX11_EVENT_COUNT];
 
     XEventsQueued(bagX11.display, QueuedAfterFlush);
 
     while (QLength(bagX11.display)) {
         XNextEvent(bagX11.display, &xevent);
 
-        for (int i = 0; i < 3; i++)
+        for (int i = 0; i < BAGX11_EVENT_COUNT; i++)
             events[i].type = bagE_EventNone;
 
         bagX11_translateEvent(events, &xevent);
 
-        for (int i = 0; i < 3; i++) {
+        for (int i = 0; i < BAGX11_EVENT_COUNT; i++) {
             if (events[i].type != bagE_EventNone) {
                 int exit = bagE_eventHandler(events+i);// merge
 
