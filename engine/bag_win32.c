@@ -9,11 +9,7 @@
 #include <locale.h>
 #include <wchar.h>
 
-// Uses dedicated gpu by default but creates a dll file.
-// __declspec(dllexport) unsigned long NvOptimusEnablement = 1;
-// __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
-
-/*
+/* TODO
  * [X] void bagE_pollEvents();
  * [X] void bagE_swapBuffers();
  * 
@@ -31,7 +27,7 @@
  * [X] bagE_EventWindowClose,
  * [X] bagE_EventWindowResize,
  *
- * [ ] bagE_EventMouseMotion,
+ * [X] bagE_EventMouseMotion,
  * [X] bagE_EventMouseButtonUp,
  * [X] bagE_EventMouseButtonDown,
  * [X] bagE_EventMouseWheel,
@@ -44,9 +40,16 @@
  */
 
 /* FIXME 
- * can't change keyboard language when window selected
- * cursor doesn't update to arrow when hower over client area
+ * [ ] can't change keyboard language when window selected
+ * [ ] cursor doesn't update to arrow when hower over client area
  */
+
+
+/* Uses dedicated gpu by default but creates a dll file. */
+#if 0
+__declspec(dllexport) unsigned long NvOptimusEnablement = 1;
+__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+#endif
 
 
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 0;
@@ -73,6 +76,7 @@ struct bagWIN32_Program
     /* state */
     int processingEvents;
     int cursorHidden;
+    int prevX, prevY;
     WINDOWPLACEMENT previousWP;
 } bagWIN32;
 
@@ -174,6 +178,8 @@ int WinMain(
 
     bagWIN32.cursorHidden = 0;
     bagWIN32.previousWP.length = sizeof(bagWIN32.previousWP);
+    bagWIN32.prevX = 0;
+    bagWIN32.prevY = 0;
 
     
     /* Raw input */
@@ -372,6 +378,50 @@ LRESULT CALLBACK bagWIN32_windowProc(
             event->data.mouseWheel.x = (signed short)(lParam & 0xFFFF);
             event->data.mouseWheel.y = (signed short)(lParam >> 16);
             break;
+
+        case WM_INPUT: {
+            unsigned int dataSize = 0;
+            HRAWINPUT rawInput = (HRAWINPUT)lParam;
+            RAWINPUT *data = NULL;
+
+            GetRawInputData(rawInput, RID_INPUT, NULL,
+                    &dataSize, sizeof(RAWINPUTHEADER));
+
+            unsigned char *rawData = malloc(dataSize);
+            if (GetRawInputData(
+                    rawInput, RID_INPUT, rawData,
+                    &dataSize, sizeof(RAWINPUTHEADER)) == (unsigned int)-1
+            ) {
+                free(rawData);
+                break;
+            }
+
+            data = (RAWINPUT*)rawData;
+
+            float dx, dy;
+            int absMode = (data->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == MOUSE_MOVE_ABSOLUTE;
+            if (absMode) {
+                // usually a case for wms
+                int isVirt = (data->data.mouse.usFlags & MOUSE_VIRTUAL_DESKTOP) != 0;
+                int width = GetSystemMetrics(isVirt ? SM_CXVIRTUALSCREEN : SM_CXSCREEN);
+                int height = GetSystemMetrics(isVirt ? SM_CYVIRTUALSCREEN : SM_CYSCREEN);
+                int x = (int)((data->data.mouse.lLastX / 65535.0f) * width);
+                int y = (int)((data->data.mouse.lLastY / 65535.0f) * height);
+                dx = (float)(x - bagWIN32.prevX);
+                dy = (float)(y - bagWIN32.prevY);
+                bagWIN32.prevX = x;
+                bagWIN32.prevY = y;
+            } else {
+                dx = (float)data->data.mouse.lLastX;
+                dy = (float)data->data.mouse.lLastY;
+            }
+
+            event->type = bagE_EventMouseMotion;
+            event->data.mouseMotion.x = dx;
+            event->data.mouseMotion.y = dy;
+
+            free(rawData);
+        } break;
 
         default:
             result = DefWindowProcW(windowHandle, message, wParam, lParam);

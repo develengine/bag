@@ -167,6 +167,14 @@ int bagE_eventHandler(bagE_Event *event)
                     event->data.mouseWheel.x,
                     event->data.mouseWheel.y);
             break;
+
+        case bagE_EventMouseMotion:
+            if (printRel) {
+                printf("rel x: %f, y: %f\n",
+                    event->data.mouseMotion.x,
+                    event->data.mouseMotion.y);
+            }
+            break;
     }
 
     return 0;
