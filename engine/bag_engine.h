@@ -10,6 +10,7 @@
  * [ ] dynamic functionality enabling
  * [ ] opengl version selection
  * [ ] separate cursor hiding and restricting into two functions
+ * [ ] create a vsync get function
  */
 
 typedef enum
