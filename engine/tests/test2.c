@@ -41,11 +41,6 @@ int bagE_main(int argc, char *argv[])
     glDebugMessageCallback(openglCallback, 0); 
 #endif
 
-    FILE *parameters = fopen("parameters.txt", "w");
-    for (int i = 0; i < argc; i++)
-        fprintf(parameters, "%d: %s\n", i, argv[i]);
-    fclose(parameters);
-
     printf("Adaptive vsync: %d\n", bagE_isAdaptiveVsyncAvailable());
 
     const char *vendorString = (const char*)glGetString(GL_VENDOR);
@@ -54,15 +49,6 @@ int bagE_main(int argc, char *argv[])
     const char *shadingLanguageVersionString = (const char*)glGetString(GL_SHADING_LANGUAGE_VERSION);
     printf("Vendor: %s\nRenderer: %s\nVersion: %s\nShading Language version: %s\n",
         vendorString, rendererString, versionString, shadingLanguageVersionString);
-
-#if 0
-    int extCount;
-    glGetIntegerv(GL_NUM_EXTENSIONS, &extCount);
-    for (int i = 0; i < extCount; i++) {
-        const char *ext = glGetStringi(GL_EXTENSIONS, i);
-        printf("extension %d: %s", i, ext);
-    }
-#endif
 
     bagE_setWindowTitle("OMEGA L Y L");
 
