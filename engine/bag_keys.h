@@ -1,7 +1,10 @@
 #ifndef BAG_KEYS_H
 #define BAG_KEYS_H
 
-// TODO Convert virtual keys and x keys to hex
+/* TODO
+ * [ ] convert defines to hex and remove includes
+ * [ ] add support for right modifier keys on windows
+ */
 
 #ifdef _WIN32
 #include <windows.h>

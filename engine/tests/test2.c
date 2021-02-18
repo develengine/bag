@@ -188,6 +188,8 @@ int bagE_eventHandler(bagE_Event *event)
                 printf("%x ", event->data.textUTF8.text[i++]);
             printf("\n");
         } break;
+
+        default: break;
     }
 
     return 0;

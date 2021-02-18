@@ -9,6 +9,7 @@
  * [ ] static functionality enabling
  * [ ] dynamic functionality enabling
  * [ ] opengl version selection
+ * [ ] separate cursor hiding and restricting into two functions
  */
 
 typedef enum
