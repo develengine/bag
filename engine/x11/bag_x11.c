@@ -137,9 +137,10 @@ static int bagX11_isGLXExtensionSupported(const char *extList, const char *exten
 
         terminator = where + strlen(extension);
 
-        if (where == start || *(where - 1) == ' ')
+        if (where == start || *(where - 1) == ' ') {
             if (*terminator == ' ' || *terminator == '\0')
                 return 1;
+        }
 
         start = terminator;
     }
@@ -418,33 +419,6 @@ int main(int argc, char *argv[])
 
     return programReturn;
 }
-
-#if 0
-static bagE_ModMask bagX11_convertModMask(unsigned int state)
-{
-    bagE_ModMask modMask = 0;
-
-    if (state & ShiftMask)   modMask |= BAGE_MOD_BIT_SHIFT;
-    if (state & LockMask)    modMask |= BAGE_MOD_BIT_LOCK;
-    if (state & ControlMask) modMask |= BAGE_MOD_BIT_CONTROL;
-    if (state & Mod1Mask)    modMask |= BAGE_MOD_BIT_ALT;
-    if (state & Mod4Mask)    modMask |= BAGE_MOD_BIT_SUPER;
-
-    return modMask;
-}
-
-
-static bagE_ButtonMask bagX11_convertButtonMask(unsigned int state)
-{
-    bagE_ButtonMask buttonMask = 0;
-
-    if (state & Button1Mask) buttonMask |= BAGE_BUTTON_BIT_LEFT;
-    if (state & Button2Mask) buttonMask |= BAGE_BUTTON_BIT_MIDDLE;
-    if (state & Button3Mask) buttonMask |= BAGE_BUTTON_BIT_RIGHT;
-
-    return buttonMask;
-}
-#endif
 
 
 static unsigned int bagX11_UTF8ToUTF32(unsigned char *s)

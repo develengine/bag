@@ -3,8 +3,6 @@
 
 #include <windows.h>
 
-#include "wglext.h"
-
 #include <stdio.h>
 #include <locale.h>
 #include <wchar.h>
@@ -16,12 +14,12 @@
  * [X] int bagE_getCursorPosition(int *x, int *y);
  * [X] void bagE_getWindowSize(int *width, int *height);
  * 
- * [ ] int bagE_isAdaptiveVsyncAvailable(void);
+ * [X] int bagE_isAdaptiveVsyncAvailable(void);
  * 
  * [X] int bagE_setHiddenCursor(int value);
  * [X] void bagE_setFullscreen(int value);
  * [X] void bagE_setWindowTitle(char *value);
- * [ ] void bagE_setSwapInterval(int value);
+ * [X] void bagE_setSwapInterval(int value);
  * [X] void bagE_setCursorPosition(int x, int y);
  *
  * [X] bagE_EventWindowClose,
@@ -52,8 +50,21 @@ __declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
 #endif
 
 
+// #include "wglext.h"
+
+#define WGL_CONTEXT_MAJOR_VERSION_ARB     0x2091
+#define WGL_CONTEXT_MINOR_VERSION_ARB     0x2092
+#define WGL_CONTEXT_FLAGS_ARB             0x2094
+
+typedef HGLRC (WINAPI * PFNWGLCREATECONTEXTATTRIBSARBPROC) (HDC hDC, HGLRC hShareContext, const int *attribList);
 static PFNWGLCREATECONTEXTATTRIBSARBPROC wglCreateContextAttribsARB = 0;
+
+typedef BOOL (WINAPI * PFNWGLSWAPINTERVALEXTPROC) (int interval);
 static PFNWGLSWAPINTERVALEXTPROC wglSwapIntervalEXT = 0;
+
+typedef const char *(WINAPI * PFNWGLGETEXTENSIONSSTRINGARBPROC) (HDC hdc);
+static PFNWGLGETEXTENSIONSSTRINGARBPROC wglGetExtensionsStringARB = 0;
+
 
 #define BAGWIN32_CHECK_WGL_PROC_ADDR(identifier) {\
     void *pfn = (void*)identifier;\
@@ -73,6 +84,7 @@ struct bagWIN32_Program
     HDC deviceContext;
     int openglLoaded;
     int newContext;
+    int adaptiveVsync;
     /* state */
     int processingEvents;
     int cursorHidden;
@@ -102,7 +114,40 @@ static int bagWIN32_loadWGLFunctionPointers()
         wglGetProcAddress("wglSwapIntervalEXT");
     BAGWIN32_CHECK_WGL_PROC_ADDR(wglSwapIntervalEXT);
 
+    wglGetExtensionsStringARB = (PFNWGLGETEXTENSIONSSTRINGARBPROC)
+        wglGetProcAddress("wglGetExtensionsStringARB");
+    BAGWIN32_CHECK_WGL_PROC_ADDR(wglGetExtensionsStringARB);
+
     return -1;
+}
+
+
+static int bagWIN32_isWGLExtensionSupported(const char *extList, const char *extension)
+{
+    const char *start;
+    const char *where, *terminator;
+  
+    where = strchr(extension, ' ');
+    if (where || *extension == '\0')
+        return 0;
+
+    for (start=extList;;) {
+        where = strstr(start, extension);
+
+        if (!where)
+            break;
+
+        terminator = where + strlen(extension);
+
+        if (where == start || *(where - 1) == ' ') {
+            if (*terminator == ' ' || *terminator == '\0')
+                return 1;
+        }
+
+        start = terminator;
+    }
+
+    return 0;
 }
 
 
@@ -245,10 +290,9 @@ int WinMain(
     int procIndex = -1;
     if ((procIndex = bagWIN32_loadWGLFunctionPointers()) != -1) {
         fprintf(stderr, "Failed to retrieve function number %d\n", procIndex);
-        // bagWIN32_error("Failed to load all WGL extension functions!");
-        // exit(-1);
         bagWIN32.context = tContext;
         bagWIN32.newContext = 0;
+        bagWIN32.adaptiveVsync = 0;
     } else {
         // TODO: expose to the user
         int attribs[] = {
@@ -268,6 +312,13 @@ int WinMain(
         wglDeleteContext(tContext);
         wglMakeCurrent(bagWIN32.deviceContext, bagWIN32.context);
         bagWIN32.newContext = 1;
+
+        const char *extensionString = wglGetExtensionsStringARB(bagWIN32.deviceContext);
+
+        bagWIN32.adaptiveVsync = bagWIN32_isWGLExtensionSupported(
+                extensionString,
+                "WGL_EXT_swap_control_tear"
+        );
     }
 
     if (!gladLoaderLoadGL()) {
@@ -432,7 +483,6 @@ LRESULT CALLBACK bagWIN32_windowProc(
             float dx, dy;
             int absMode = (data->data.mouse.usFlags & MOUSE_MOVE_ABSOLUTE) == MOUSE_MOVE_ABSOLUTE;
             if (absMode) {
-                // usually a case for wms
                 int isVirt = (data->data.mouse.usFlags & MOUSE_VIRTUAL_DESKTOP) != 0;
                 int width = GetSystemMetrics(isVirt ? SM_CXVIRTUALSCREEN : SM_CXSCREEN);
                 int height = GetSystemMetrics(isVirt ? SM_CYVIRTUALSCREEN : SM_CYSCREEN);
@@ -550,6 +600,12 @@ void bagE_getWindowSize(int *width, int *height)
 }
 
 
+int bagE_isAdaptiveVsyncAvailable(void)
+{
+    return bagWIN32.adaptiveVsync;
+}
+
+
 void bagE_setWindowTitle(char *value)
 {
     SetWindowTextA(bagWIN32.window, value);
@@ -620,4 +676,11 @@ void bagE_setCursorPosition(int x, int y)
     POINT point = { x, y };
     ClientToScreen(bagWIN32.window, &point);
     SetCursorPos(point.x, point.y);
+}
+
+
+void bagE_setSwapInterval(int value)
+{
+    if (bagWIN32.newContext)
+        wglSwapIntervalEXT(value);
 }

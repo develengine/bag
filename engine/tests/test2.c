@@ -46,6 +46,8 @@ int bagE_main(int argc, char *argv[])
         fprintf(parameters, "%d: %s\n", i, argv[i]);
     fclose(parameters);
 
+    printf("Adaptive vsync: %d\n", bagE_isAdaptiveVsyncAvailable());
+
     const char *vendorString = (const char*)glGetString(GL_VENDOR);
     const char *rendererString = (const char*)glGetString(GL_RENDERER);
     const char *versionString = (const char*)glGetString(GL_VERSION);
@@ -119,7 +121,6 @@ int bagE_eventHandler(bagE_Event *event)
                 bagE_setHiddenCursor(shiftDown);
             } else if (event->data.key.key == KEY_I) {
                 bagE_setCursorPosition(100, 100);
-                printf("oh nyoo\n");
             } else if (event->data.key.key == KEY_M) {
                 if (shiftDown) {
                     printRel = !printRel;
