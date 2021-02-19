@@ -2,6 +2,7 @@
 #include <limits.h>
 #include <stdint.h>
 
+#include "bag_engine.h"
 #include "bag_console.h"
 
 /* TODO
@@ -33,8 +34,8 @@ typedef struct
 typedef struct
 {
     float x, y, w, h;
-    float xOff, yOff;
-} GlyphTransform;
+    int xOff, yOff;
+} GlyphUniform;
 
 void writeBitmap(
         uint8_t *src, uint8_t *dest,
@@ -48,7 +49,48 @@ void writeBitmap(
     }
 }
 
+static char *readFileToString(const char *path)
+{
+    FILE *file = fopen(path, "r");
+    
+    if (!file)
+        return NULL;
+
+    fseek(file, 0, SEEK_END);
+    int size = ftell(file);
+    rewind(file);
+    
+    char *data = malloc(size);
+    if (!data) {
+        fprintf(stderr, "file loader: Malloc fail!\n");
+        return NULL;
+    }
+
+    fread(data, size, 1, file);
+    fclose(file);
+
+    data[size - 1] = '\0';
+
+    return data;
+}
+
+
 const char *bagC_font = "JetBrainsMono-Regular.ttf";
+
+
+struct
+{
+    unsigned int vao;
+    unsigned int vertex;
+    unsigned int fragment;
+    unsigned int program;
+    struct 
+    {
+        int position;
+        int scale;
+    } uniform;
+} global;
+
 
 int bagC_init()
 {
@@ -94,7 +136,8 @@ int bagC_init()
     printf("numGlyphs: %d\n", fontInfo.numGlyphs);
     unsigned char **bitmaps = malloc(fontInfo.numGlyphs * sizeof(unsigned char*));
     Rectangle *rects = malloc(fontInfo.numGlyphs * sizeof(Rectangle));
-    if (!bitmaps || !rects) {
+    GlyphUniform *uniforms = malloc(fontInfo.numGlyphs * sizeof(GlyphUniform));
+    if (!bitmaps || !rects || !uniforms) {
         fprintf(stderr, "bag console: Malloc fail!\n");
         return -1;
     }
@@ -120,6 +163,8 @@ int bagC_init()
         rects[i].w = width;
         rects[i].h = height;
         rects[i].index = i;
+        uniforms[i].xOff = xOff;
+        uniforms[i].yOff = yOff;
     }
 
     packRects(rects, fontInfo.numGlyphs);
@@ -152,13 +197,73 @@ int bagC_init()
 
     // free(atlasBuffer);
     free(rects);
-    free(fontBuffer);
+    // free(fontBuffer);
 
 
-    
+    glGenVertexArrays(1, &global.vao);
+    glBindVertexArray(global.vao);
 
+
+
+    glBindVertexArray(0);
+
+
+    int success;
+    char infoLog[512];
+
+    char *vertexSource = readFileToString("shaders/vertex.glsl");
+    char *fragmentSource = readFileToString("shaders/fragment.glsl");
+
+    global.vertex = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(global.vertex, 1, (const char * const*)&vertexSource, NULL);
+    glCompileShader(global.vertex);
+    glGetShaderiv(global.vertex, GL_COMPILE_STATUS, &success);
+
+    if (!success) {
+        glGetShaderInfoLog(global.vertex, 512, NULL, infoLog);
+        fprintf(stderr, "Failed to compile vertex shader!\nError: %s\n", infoLog);
+    }
+
+    global.fragment = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(global.fragment, 1, (const char * const*)&fragmentSource, NULL);
+    glCompileShader(global.fragment);
+    glGetShaderiv(global.fragment, GL_COMPILE_STATUS, &success);
+
+    if (!success) {
+        glGetShaderInfoLog(global.fragment, 512, NULL, infoLog);
+        fprintf(stderr, "Failed to compile fragment shader!\nError: %s\n", infoLog);
+    }
+
+    global.program = glCreateProgram();
+    glAttachShader(global.program, global.vertex);
+    glAttachShader(global.program, global.fragment);
+    glLinkProgram(global.program);
+    glGetProgramiv(global.program, GL_LINK_STATUS, &success);
+
+    if (!success) {
+        glGetProgramInfoLog(global.program, 512, NULL, infoLog);
+        fprintf(stderr, "Failed to link shader program!\nError: %s\n", infoLog);
+    }
+
+    free(vertexSource);
+    free(fragmentSource);
+
+    global.uniform.position = glGetUniformLocation(global.program, "UNIFORM.position");
+    global.uniform.scale = glGetUniformLocation(global.program, "UNIFORM.scale");
 
     return 0;
+}
+
+
+void bagC_drawCringe()
+{
+    glBindVertexArray(global.vao);
+    glUseProgram(global.program);
+
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+
+    glBindVertexArray(0);
+    glUseProgram(0);
 }
 
 #undef FAILED_FILE_IO
