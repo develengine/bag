@@ -11,6 +11,7 @@
  * [ ] opengl version selection
  * [ ] separate cursor hiding and restricting into two functions
  * [ ] create a vsync get function
+ * [ ] add a blocking event handling routine
  */
 
 typedef enum

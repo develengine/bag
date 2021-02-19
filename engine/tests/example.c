@@ -70,6 +70,11 @@ int bagE_eventHandler(bagE_Event *event)
             running = 0;
             return 1;
 
+        case bagE_EventWindowResize: {
+            bagE_WindowResize *wr = &(event->data.windowResize);
+            glViewport(0, 0, wr->width, wr->height);
+        } break;
+
         default: break;
     }
 
