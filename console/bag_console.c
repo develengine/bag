@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdint.h>
+#include <time.h>
 
 #include "bag_engine.h"
 #include "bag_console.h"
@@ -26,6 +27,7 @@ typedef struct
 {
     int x, y;
     int w, h;
+    int flags;
     int index;
 } Rectangle;
 
@@ -33,7 +35,7 @@ typedef struct
 
 typedef struct
 {
-    float x, y, w, h;
+    int x, y, w, h;
     int xOff, yOff;
 } Glyph;
 
@@ -75,10 +77,9 @@ static char *readFileToString(const char *path)
 }
 
 
-const char *bagC_font = "JetBrainsMono-Regular.ttf";
-const char *bagC_text = "OMEGALYL";
-
-#define INSTANCE_COUNT 16
+const char *bagC_font = "JetBrainsMono/regular-stripped.ttf";
+const char *bagC_text = "OMEGALUL Omega Lyl omgalu";
+#define FONT_SIZE 20
 
 static struct
 {
@@ -90,16 +91,12 @@ static struct
     unsigned int storage;
     struct 
     {
+        int screenRes;
         int position;
-        int scale;
-        int code;
+        int chars;
     } uniform;
-    float position[2 * INSTANCE_COUNT];
-    float scale[2 * INSTANCE_COUNT];
-    int code[INSTANCE_COUNT];
-    int index;
-    int text[100];
     int textSize;
+    int text[400];
 } global;
 
 
@@ -153,12 +150,16 @@ int bagC_init()
         return -1;
     }
 
+    float fontScale = stbtt_ScaleForPixelHeight(&fontInfo, FONT_SIZE);
+    printf("What is it? %f\n", fontScale);
+    // float fontScale = (float)FONT_SIZE;
+
     for (int i = 0; i < fontInfo.numGlyphs; i++) {
         int xOff, yOff, width, height;
         unsigned char *bitmap = stbtt_GetGlyphBitmap(
                 &fontInfo,
                 0,
-                stbtt_ScaleForPixelHeight(&fontInfo, 32),
+                fontScale,
                 i,
                 &width, &height,
                 &xOff, &yOff
@@ -172,12 +173,20 @@ int bagC_init()
         rects[i].y = 0;
         rects[i].w = width;
         rects[i].h = height;
+        rects[i].flags = 0;
         rects[i].index = i;
+        glyphs[i].w = width;
+        glyphs[i].h = height;
         glyphs[i].xOff = xOff;
         glyphs[i].yOff = yOff;
     }
 
+    clock_t t = clock();
     packRects(rects, fontInfo.numGlyphs);
+    double taken = (double)(clock() - t) / CLOCKS_PER_SEC;
+    printf("Took %lf\n", taken);
+
+
     Span atlasSpan = getSpan(rects, fontInfo.numGlyphs);
     atlasSpan.w = ceil(atlasSpan.w / 4.f) * 4;  // necessary for alignment
 
@@ -193,10 +202,8 @@ int bagC_init()
     for (int i = 0; i < fontInfo.numGlyphs; i++) {
         int bitmapIndex = rects[i].index;
 
-        glyphs[bitmapIndex].x = (float)rects[i].x / (float)atlasSpan.w;
-        glyphs[bitmapIndex].y = (float)rects[i].y / (float)atlasSpan.h;
-        glyphs[bitmapIndex].w = (float)rects[i].w / (float)atlasSpan.w;
-        glyphs[bitmapIndex].h = (float)rects[i].h / (float)atlasSpan.h;
+        glyphs[bitmapIndex].x = rects[i].x;
+        glyphs[bitmapIndex].y = rects[i].y;
 
         writeBitmap(
                 bitmaps[bitmapIndex], atlasBuffer,
@@ -216,12 +223,14 @@ int bagC_init()
     // free(fontBuffer);
 
 
+#if 0
     int sp = 0;
     while (bagC_text[sp] != 0) {
         global.text[sp] = stbtt_FindGlyphIndex(&fontInfo, bagC_text[sp]);
         ++sp;
     }
     global.textSize = sp;
+#endif
 
 
     glGenVertexArrays(1, &global.vao);
@@ -248,10 +257,6 @@ int bagC_init()
 
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
-    // float borderColor[] = { 0.0f, 0.0f, 0.0f, 0.0f };
-    // glTexParameterfv(GL_TEXTURE_2D, GL_TEXTURE_BORDER_COLOR, borderColor);
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_BORDER);	
-    // glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_BORDER);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -313,63 +318,60 @@ int bagC_init()
     free(vertexSource);
     free(fragmentSource);
 
-    global.uniform.position = glGetUniformLocation(global.program, "u_position");
-    global.uniform.scale = glGetUniformLocation(global.program, "u_scale");
-    global.uniform.code = glGetUniformLocation(global.program, "u_code");
+    global.uniform.screenRes = glGetUniformLocation(global.program, "u_screenRes");
+    global.uniform.position  = glGetUniformLocation(global.program, "u_position");
+    global.uniform.chars     = glGetUniformLocation(global.program, "u_chars");
 
-    global.index = 0;
+    int index = 0, ypos;
+    float xpos = 0;
+    stbtt_GetFontVMetrics(&fontInfo, &ypos, 0, 0);
+    ypos *= fontScale;
+    int glyphIndex = stbtt_FindGlyphIndex(&fontInfo, bagC_text[0]);
+    while (bagC_text[index]) {
+        int advance, lsb, newGlyphIndex;
+        stbtt_GetGlyphHMetrics(&fontInfo, glyphIndex, &advance, &lsb);
 
-    for (int i = 0; i < INSTANCE_COUNT * 2; i += 2) {
-        global.position[i] = ((rand() % 256) - 128) / 127.5f;
-        global.position[i + 1] = ((rand() % 256) - 128) / 127.5f;
+        global.text[index * 4]     = (int)xpos;
+        global.text[index * 4 + 1] = ypos;
+        global.text[index * 4 + 2] = 0xFFBFBEB5;  //b5bebf
+        global.text[index * 4 + 3] = glyphIndex;
 
-        global.scale[i] = (rand() % 256) / 255.f;
-        global.scale[i + 1] = (rand() % 256) / 255.f;
+        xpos += advance * fontScale;
+        if (bagC_text[index + 1]) {
+            newGlyphIndex = stbtt_FindGlyphIndex(&fontInfo, bagC_text[index + 1]);
+            xpos += fontScale * stbtt_GetGlyphKernAdvance(&fontInfo, glyphIndex, newGlyphIndex);
+        }
 
-        global.code[i / 2] = global.text[rand() % global.textSize];
+        glyphIndex = newGlyphIndex;
+        ++index;
     }
-
-    return 0;
-}
-
-void bagC_drawCringe()
-{
+    global.textSize = index;
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-    global.position[global.index] = ((rand() % 256) - 128) / 127.5f;
-    global.position[global.index + 1] = ((rand() % 256) - 128) / 127.5f;
-
-    global.scale[global.index] = (rand() % 128 + 128) / 510.f;
-    global.scale[global.index + 1] = (rand() % 128 + 128) / 510.f;
-
-    global.code[global.index / 2] = global.text[rand() % global.textSize];
-
-    global.index = (global.index + 2) % (INSTANCE_COUNT * 2);
-
-    glProgramUniform2fv(global.program, global.uniform.position, INSTANCE_COUNT, global.position);
-    glProgramUniform2fv(global.program, global.uniform.scale, INSTANCE_COUNT, global.scale);
-    glProgramUniform1iv(global.program, global.uniform.code, INSTANCE_COUNT, global.code);
 
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, global.texture);
     glBindVertexArray(global.vao);
     glUseProgram(global.program);
 
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, INSTANCE_COUNT);
+    return 0;
+}
 
-#if 0
-    float pos[] = { 0.0f, 0.0f };
-    float scale[] = { 2.0f, 2.0f };
-    glProgramUniform2fv(global.program, global.uniform.position, 1, pos);
-    glProgramUniform2fv(global.program, global.uniform.scale, 1, scale);
+void bagC_drawCringe()
+{
+    int position[] = { 100, 100 };
+    int screenRes[2];
+    bagE_getWindowSize(screenRes, screenRes+1);
 
-    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, 1);
-#endif
+    glProgramUniform2iv(global.program, global.uniform.screenRes, 1, screenRes);
+    glProgramUniform2iv(global.program, global.uniform.position, 1, position);
+    glProgramUniform4iv(global.program, global.uniform.chars, global.textSize, global.text);
 
-    glBindVertexArray(0);
-    glUseProgram(0);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, global.textSize);
+
+    // glBindVertexArray(0);
+    // glUseProgram(0);
 }
 
 #undef FAILED_FILE_IO

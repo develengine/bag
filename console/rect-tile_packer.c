@@ -1,3 +1,5 @@
+#include <limits.h>
+
 typedef struct
 {
     int w, h;
@@ -103,7 +105,7 @@ static inline void sortRects(Rectangle *rects, int count)
     sortRects(rects + (rightPointer + 1), count - rightPointer - 1);
 }
 
-#if 0
+
 void packRects(Rectangle *rects, int count)
 {
     int placedCount = 1;
@@ -159,8 +161,9 @@ void packRects(Rectangle *rects, int count)
         ++placedCount;
     }
 }
-#else
-void packRects(Rectangle *rects, int count)
+
+
+void packRectsF(Rectangle *rects, int count)
 {
     int placedCount = 1;
 
@@ -176,7 +179,73 @@ void packRects(Rectangle *rects, int count)
         int bestPlacedSide = 0;
 
         for (Rectangle *placed = rects; placed < rects + placedCount; placed++) {
-            Rectangle testRect = { placed->x + placed->w, placed->y, rect->w, rect->h };
+            Rectangle testRect = { placed->x + placed->w, placed->y, rect->w, rect->h, placed->flags };
+
+            if (!(testRect.flags & 0x01) && !doesIntersect(testRect, rects, placedCount)) {
+                int reachX = testRect.x + rect->w;
+                int reachY = testRect.y + rect->h;
+                int newLongerReach, newShorterReach;
+                SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
+
+                if ((newLongerReach < smallestLongerReach) ||
+                    (newLongerReach == smallestLongerReach && newShorterReach < smallestShorterReach))
+                {
+                    bestX = testRect.x;
+                    bestY = testRect.y;
+                    smallestLongerReach = newLongerReach;
+                    smallestShorterReach = newShorterReach;
+                    bestPlaced = placed;
+                    bestPlacedSide = 0;
+                }
+            }
+
+            testRect.x = placed->x;
+            testRect.y = placed->y + placed->h;
+
+            if (!(testRect.flags & 0x02) && !doesIntersect(testRect, rects, placedCount)) {
+                int reachX = testRect.x + rect->w;
+                int reachY = testRect.y + rect->h;
+                int newLongerReach, newShorterReach;
+                SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
+
+                if ((newLongerReach < smallestLongerReach) ||
+                    (newLongerReach == smallestLongerReach && newShorterReach < smallestShorterReach))
+                {
+                    bestX = testRect.x;
+                    bestY = testRect.y;
+                    smallestLongerReach = newLongerReach;
+                    smallestShorterReach = newShorterReach;
+                    bestPlaced = placed;
+                    bestPlacedSide = 1;
+                }
+            }
+        }
+
+        bestPlaced->flags |= (1 << bestPlacedSide);
+
+        rect->x = bestX;
+        rect->y = bestY;
+        ++placedCount;
+    }
+}
+
+void packRectsFA(Rectangle *rects, int count)
+{
+    int placedCount = 1;
+
+    sortRects(rects, count);
+    rects->x = 0;
+    rects->y = 0;
+
+    for (Rectangle *rect = rects + 1; rect < rects + count; rect++) {
+        int bestX = -1, bestY = -1;
+        int smallestLongerReach = INT_MAX;
+        int smallestShorterReach = INT_MAX;
+        Rectangle *bestPlaced = NULL;
+        int bestPlacedSide = 0;
+
+        for (Rectangle *placed = rects; placed < rects + placedCount; placed++) {
+            Rectangle testRect = { placed->x + placed->w, placed->y, rect->w, rect->h, placed->flags };
 
             if (!(testRect.flags & 0x01)) {
                 int reachX = testRect.x + rect->w;
@@ -229,6 +298,4 @@ void packRects(Rectangle *rects, int count)
         ++placedCount;
     }
 }
-#endif
-
 

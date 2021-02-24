@@ -18,38 +18,38 @@ typedef enum
 } bagT_MemoryType;
 
 
-typedef struct
-{
+struct bagT_Font;
+typedef struct bagT_Font bagT_Font;
 
-} bagT_Font;
-
-
-typedef struct
-{
-
-} bagT_Memory;
-
+struct bagT_Memory;
+typedef struct bagT_Memory bagT_Memory;
 
 typedef struct
 {
     int x, y;
+    int color;
     int glyphIndex;
-    unsigned int color;
 } bagT_Char;
 
 
-int bagT_init(bagT_Font *font, const char *dir, int size, int index);
-void bagT_updateResolition(bagT_Font *font, int width, int height);
-void bagT_destroy(bagT_Font *font);
+int bagT_init(int screenWidth, int screenHeight);
+void bagT_updateResolution(int screenWidth, int screenHeight);
+void bagT_destroy();
 
-int bagT_allocateMemory(bagT_Memory *memory, int length, bagT_MemoryType type);
-int bagT_fillMemory(bagT_Memory *memory, int offset, bagT_Char *chars, int length);
+int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index);
+void bagT_destroyFont(bagT_Font *font);
+
+int bagT_allocateMemory(bagT_Font *font, bagT_Memory *memory, int length, bagT_MemoryType type);
+int bagT_fillMemory(bagT_Font *font, bagT_Memory *memory, int offset, bagT_Char *chars, int length);
 int bagT_destroyMemory(bagT_Memory *memory);
 
 int bagT_codepointToGlyphIndex(bagT_Font *font, int codepoint);
-int bagT_UTF8ToGlyphIndex(bagT_Font *font, const char *ch, int *offset);
-int bagT_UTF8Length(const char *string);
+int bagT_UTF8ToGlyphIndex(bagT_Font *font, const unsigned char *ch, int *offset);
+float bagT_getAdvance(bagT_Font *font, int glyphIndex);
+float bagT_getKerning(bagT_Font *font, int glyphIndex);
+float bagT_getVerticalOffset(bagT_Font *font);
 
+int bagT_UTF8Length(const unsigned char *string);
 
 int bagT_renderUTF8String(
         bagT_Font *font,
