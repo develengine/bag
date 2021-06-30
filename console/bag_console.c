@@ -78,7 +78,7 @@ static char *readFileToString(const char *path)
 
 
 const char *bagC_font = "JetBrainsMono/regular-stripped.ttf";
-const char *bagC_text = "OMEGALUL Omega Lyl omgalu";
+const char *bagC_text = "Sub zero pouches liquefying, V eat jam KEKW xd.";
 #define FONT_SIZE 20
 
 static struct
@@ -249,14 +249,14 @@ int bagC_init()
             glyphs,
             GL_STATIC_DRAW
     );
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, global.storage);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 3, global.storage);
 
 
     glGenTextures(1, &global.texture);
     glBindTexture(GL_TEXTURE_2D, global.texture);
 
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 
@@ -350,7 +350,7 @@ int bagC_init()
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    glActiveTexture(GL_TEXTURE0);
+    glActiveTexture(GL_TEXTURE2);
     glBindTexture(GL_TEXTURE_2D, global.texture);
     glBindVertexArray(global.vao);
     glUseProgram(global.program);

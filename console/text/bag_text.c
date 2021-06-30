@@ -1,27 +1,64 @@
+/* TODO
+ * [X] int bagT_init(int screenWidth, int screenHeight);
+ * [X] void bagT_updateResolution(int screenWidth, int screenHeight);
+ * [X] void bagT_useProgram(bagT_Program program);
+ * [X] void bagT_destroy();
+ *
+ * [X] int bagT_initFont(bagT_Font **font, const char *path, float fontSize, int index);
+ * [X] void bagT_bindFont(bagT_Font *font);
+ * [X] void bagT_destroyFont(bagT_Font *font);
+ *
+ * [ ] int bagT_allocateMemory(bagT_Memory **memory, int length, bagT_MemoryType type);
+ * [ ] int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
+ * [ ] void bagT_bindMemory(bagT_Memory *memory);
+ * [ ] int bagT_freeMemory(bagT_Memory *memory);
+ *
+ * [X] int bagT_codepointToGlyphIndex(bagT_Font *font, int codepoint);
+ * [X] int bagT_UTF8ToGlyphIndex(bagT_Font *font, const unsigned char *ch, int *offset);
+ * [X] void bagT_getOffset(bagT_Font *font, int glyphIndex, int *x, int *y);
+ * [X] int bagT_getAdvance(bagT_Font *font, int glyphIndex);
+ * [ ] float bagT_getKerning(bagT_Font *font, int glyphIndex1, int glyphIndex2);
+ * [ ] float bagT_getLineHeight(bagT_Font *font);
+ *
+ * [ ] int bagT_UTF8Length(const unsigned char *string);
+ *
+ * [ ] int bagT_renderUTF8String(
+ *             const char *string,
+ *             int x, int y,
+ *             bagT_Compositor compositor,
+ *             float maxLength
+ *     );
+ *
+ * [ ] int bagT_renderCodepoints(
+ *             int *codepoints,
+ *             int count,
+ *             int x, int y,
+ *             bagT_Compositor compositor,
+ *             float maxLength
+ *     );
+ *
+ * [ ] int bagT_renderChars(bagT_Char *chars, int count, int x, int y);
+ *
+ * [ ] int bagT_renderMemory(int index, int count, int x, int y);
+ */
+
 #include "bag_text.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-struct bagT_Font
-{
-    stbtt_fontinfo fontInfo;
-    unsigned char *fontData;
-    float fontScale;
-
-    unsigned int atlas;
-    unsigned int glyphs;
-};
-typedef struct bagT_Font bagT_Font;
-
-struct bagT_Memory
-{
-
-};
-typedef struct bagT_Memory bagT_Memory;
+#include BAGT_GL_PATH
 
 #include <stdio.h>
 #include <string.h>
+#include <limits.h>
+
+#define BAGT_FILE_ERROR()\
+    fprintf(stderr, "bag text: Failed file IO!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
+
+#define BAGT_MALLOC_ERROR()\
+    fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
+
 
 typedef struct
 {
@@ -37,42 +74,51 @@ typedef struct
  * [ ] support custom allocators
  */
 
+
 typedef struct  // TODO pack into 16 bytes
 {
     int x, y, w, h;
     int xOff, yOff;
 } Glyph;
 
-#define BAGT_FILE_ERROR()\
-    fprintf(stderr, "bag text: Failed file IO!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
 
-#define BAGT_MALLOC_ERROR()\
-    fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
+struct bagT_Font
+{
+    stbtt_fontinfo fontInfo;
+    unsigned char *fontData;
+    float fontScale;
+
+    Glyph *glyphBuffer;
+
+    unsigned int atlas;
+    unsigned int glyphs;
+};
+
+
+struct bagT_Memory
+{
+    int leMember;
+};
+
+
+typedef struct
+{
+    unsigned int vertexShader;
+    unsigned int fragmentShader;
+    unsigned int shaderProgram;
+
+    struct {
+        int screenRes;
+        int position;
+        int chars;
+    } uni;
+} bagT_Shader;
+
 
 struct BagT
 {
-    struct bagT_Shader {
-        unsigned int vertexShader;
-        unsigned int fragmentShader;
-        unsigned int shaderProgram;
-
-        struct {
-            int screenRes;
-            int position;
-            int chars;
-        } uni;
-    } simple;
-
-    struct bagT_Shader {
-        unsigned int vertexShader;
-        unsigned int fragmentShader;
-        unsigned int shaderProgram;
-
-        struct {
-            int screenRes;
-            int position;
-        } uni;
-    } normal;
+    bagT_Shader simple;
+    bagT_Shader memory;
 } bagT;
 
 
@@ -110,7 +156,7 @@ static char *bagT_readFileToString(const char *path)
         return NULL;
     }
 
-    if (fread(data, size, 1, file) != size) {
+    if (fread(data, 1, size, file) != size) {
         BAGT_FILE_ERROR();
         free(data);
         return NULL;
@@ -132,21 +178,21 @@ static int bagT_loadShader(
         unsigned int *fragmentShader,
         unsigned int *shaderProgram)
 {
-    unsigned int vertex, fragment, program;
+    char *vertexSource = NULL, *fragmentSource = NULL;
+    unsigned int vertex = 0, fragment = 0, program = 0;
     int success;
     char infoLog[512];
 
-    char *vertexSource = bagT_readFileToString(vertexPath);
+    vertexSource = bagT_readFileToString(vertexPath);
     if (!vertexSource) {
         fprintf(stderr, "bag text: Failed to load vertex shader source code!\n");
-        return -1;
+        goto error_exit;
     }
 
-    char *fragmentSource = bagT_readFileToString(fragmentPath);
+    fragmentSource = bagT_readFileToString(fragmentPath);
     if (!fragmentSource) {
         fprintf(stderr, "bag text: Failed to load fragment shader source code!\n");
-        free(vertexSource);
-        return -1;
+        goto error_exit;
     }
 
     vertex = glCreateShader(GL_VERTEX_SHADER);
@@ -156,8 +202,11 @@ static int bagT_loadShader(
     if (!success) {
         glGetShaderInfoLog(vertex, 512, NULL, infoLog);
         fprintf(stderr, "bag text: Failed to compile vertex shader!\nError: %s\n", infoLog);
-        goto delete_vertex;
+        goto error_exit;
     }
+
+    free(vertexSource);
+    vertexSource = NULL;
 
     fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, (const char * const*)&fragmentSource, NULL);
@@ -166,8 +215,11 @@ static int bagT_loadShader(
     if (!success) {
         glGetShaderInfoLog(fragment, 512, NULL, infoLog);
         fprintf(stderr, "bag text: Failed to compile fragment shader!\nError: %s\n", infoLog);
-        goto delete_fragment;
+        goto error_exit;
     }
+
+    free(fragmentSource);
+    fragmentSource = NULL;
 
     program = glCreateProgram();
     glAttachShader(program, vertex);
@@ -177,24 +229,25 @@ static int bagT_loadShader(
     if (!success) {
         glGetProgramInfoLog(program, 512, NULL, infoLog);
         fprintf(stderr, "bag text: Failed to link shader program!\nError: %s\n", infoLog);
-        goto delete_program;
+        goto error_exit;
     }
-
-    free(vertexSource);
-    free(fragmentSource);
 
     *vertexShader = vertex;
     *fragmentShader = fragment;
     *shaderProgram = program;
     return 0;
 
-delete_program:
-    glDeleteShader(fragment);
-delete_fragment:
-    glDeleteShader(vertex);
-delete_vertex:
-    free(fragmentSource);
-    free(vertexSource);
+error_exit:
+    if (fragmentSource)
+        free(fragmentSource);
+    if (vertexSource)
+        free(vertexSource);
+    if (vertex)
+        glDeleteShader(vertex);
+    if (fragment)
+        glDeleteShader(fragment);
+    if (program)
+        glDeleteProgram(program);
     return -1;
 }
 
@@ -214,7 +267,7 @@ int bagT_init(int screenWidth, int screenHeight)
             &bagT.simple.shaderProgram
     );
     if (result) {
-        fprintf(stderr, "bag text: Failed to load simple shader!\n");
+        fprintf(stderr, "bag text: Failed to load simple program!\n");
         return -1;
     }
 
@@ -225,35 +278,25 @@ int bagT_init(int screenWidth, int screenHeight)
     bagT.simple.uni.chars     = glGetUniformLocation(bagT.simple.shaderProgram, "u_chars");
     BAGT_UNIFORM_CHECK(bagT.simple.uni.chars, "u_chars");
 
-    glProgramUniform2i(
-            bagT.simple.shaderProgram,
-            bagT.simple.uni.screenRes,
-            screenWidth, screenHeight
-    );
-
     result = bagT_loadShader(
-            "shaders/normal_vert.glsl",
-            "shaders/normal_frag.glsl",
-            &bagT.normal.vertexShader,
-            &bagT.normal.fragmentShader,
-            &bagT.normal.shaderProgram
+            "shaders/memory_vert.glsl",
+            "shaders/memory_frag.glsl",
+            &bagT.memory.vertexShader,
+            &bagT.memory.fragmentShader,
+            &bagT.memory.shaderProgram
     );
     if (result) {
-        fprintf(stderr, "bag text: Failed to load normal shader!\n");
+        fprintf(stderr, "bag text: Failed to load memory program!\n");
         bagT_destroyShader(&bagT.simple);
         return -1;
     }
 
-    bagT.normal.uni.screenRes = glGetUniformLocation(bagT.normal.shaderProgram, "u_screenRes");
-    BAGT_UNIFORM_CHECK(bagT.normal.uni.screenRes, "u_screenRes");
-    bagT.normal.uni.position  = glGetUniformLocation(bagT.normal.shaderProgram, "u_position");
-    BAGT_UNIFORM_CHECK(bagT.normal.uni.position, "u_position");
+    bagT.memory.uni.screenRes = glGetUniformLocation(bagT.memory.shaderProgram, "u_screenRes");
+    BAGT_UNIFORM_CHECK(bagT.memory.uni.screenRes, "u_screenRes");
+    bagT.memory.uni.position  = glGetUniformLocation(bagT.memory.shaderProgram, "u_position");
+    BAGT_UNIFORM_CHECK(bagT.memory.uni.position, "u_position");
 
-    glProgramUniform2i(
-            bagT.normal.shaderProgram,
-            bagT.normal.uni.screenRes,
-            screenWidth, screenHeight
-    );
+    bagT_updateResolution(screenWidth, screenHeight);
 
     return 0;
 }
@@ -267,18 +310,37 @@ void bagT_updateResolution(int screenWidth, int screenHeight)
             screenWidth, screenHeight
     );
     glProgramUniform2i(
-            bagT.normal.shaderProgram,
-            bagT.normal.uni.screenRes,
+            bagT.memory.shaderProgram,
+            bagT.memory.uni.screenRes,
             screenWidth, screenHeight
     );
+}
+
+
+void bagT_useProgram(bagT_Program program)
+{
+    switch (program)
+    {
+        case bagT_NoProgram:
+            glUseProgram(0);
+            break;
+
+        case bagT_SimpleProgram:
+            glUseProgram(bagT.simple.shaderProgram);
+            break;
+
+        case bagT_MemoryProgram:
+            glUseProgram(bagT.memory.shaderProgram);
+            break;
+    }
 }
 
 
 void bagT_destroy()
 {
     bagT_destroyShader(&bagT.simple);
-    bagT_destroyShader(&bagT.normal);
-{
+    bagT_destroyShader(&bagT.memory);
+}
 
 
 static inline void bagT_writeBitmap(
@@ -294,25 +356,39 @@ static inline void bagT_writeBitmap(
 }
 
 
-int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
+int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int index)
 {
+    unsigned char **bitmaps = NULL;
+    Rectangle *rects = NULL;
+    Glyph *glyphs = NULL;
+    unsigned char *atlasBuffer = NULL;
+
+    bagT_Font *font = malloc(sizeof(bagT_Font));
+    if (!font) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+
+    font->fontData = NULL;
+
+
     /* load font file to memory */
 
     FILE *fontFile = fopen(path, "rb");
     if (!fontFile) {
         fprintf(stderr, "bag font: Failed to load font file!\n");
-        return -1;
+        goto error_exit;
     }
 
     if (fseek(fontFile, 0L, SEEK_END)) {
         BAGT_FILE_ERROR();
-        return -1;
+        goto error_exit;
     }
 
     int fontFileSize = ftell(fontFile);
     if (fontFileSize == -1L) {
         BAGT_FILE_ERROR();
-        return -1;
+        goto error_exit;
     }
 
     rewind(fontFile);
@@ -320,12 +396,12 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
     font->fontData = malloc(fontFileSize);
     if (!font->fontData) {
         BAGT_MALLOC_ERROR();
-        return -1;
+        goto error_exit;
     }
 
     if (fread(font->fontData, 1, fontFileSize, fontFile) != fontFileSize) {
         BAGT_FILE_ERROR();
-        goto free_font;
+        goto error_exit;
     }
 
     if (fclose(fontFile))
@@ -341,7 +417,7 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
     );
     if (!result) {
         fprintf(stderr, "bag text: Failed to load font from font file!\n");
-        goto free_font;
+        goto error_exit;
     }
 
     font->fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
@@ -349,25 +425,27 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
     
     /* build atlas and glyphs array */
 
-    unsigned char **bitmaps = malloc(font->fontInfo.numGlyphs * sizeof(unsigned char*));
+    int glyphCount = font->fontInfo.numGlyphs;  // NOTE: """opaque type"""
+
+    bitmaps = malloc(glyphCount * sizeof(unsigned char*));
     if (!bitmaps) {
         BAGT_MALLOC_ERROR();
-        goto free_font;
+        goto error_exit;
     }
 
-    Rectangle *rects = malloc(font->fontInfo.numGlyphs * sizeof(Rectangle));
+    rects = malloc(glyphCount * sizeof(Rectangle));
     if (!rects) {
         BAGT_MALLOC_ERROR();
-        goto free_bitmaps;
+        goto error_exit;
     }
 
-    Glyph *glyphs = malloc(font->fontInfo.numGlyphs * sizeof(Glyph));
+    glyphs = malloc(glyphCount * sizeof(Glyph));
     if (!glyphs) {
         BAGT_MALLOC_ERROR();
-        goto free_rects;
+        goto error_exit;
     }
 
-    for (int i = 0; i < font->fontInfo.numGlyphs; i++) {
+    for (int i = 0; i < glyphCount; i++) {
         int xOff, yOff, width, height;
         unsigned char *bitmap = stbtt_GetGlyphBitmap(
                 &font->fontInfo,
@@ -391,18 +469,20 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
         glyphs[i].yOff = yOff;
     }
 
-    packRects(rects, font->fontInfo.numGlyphs);
+    packRects(rects, glyphCount);
 
-    Span atlasSpan = getSpan(rects, font->fontInfo.numGlyphs);
+    Span atlasSpan = getSpan(rects, glyphCount);
     atlasSpan.w = ceil(atlasSpan.w / 4.f) * 4;  // necessary for alignment
-    uint8_t *atlasBuffer = malloc(atlasSpan.w * atlasSpan.h);
+
+    atlasBuffer = malloc(atlasSpan.w * atlasSpan.h);
     if (!atlasBuffer) {
         BAGT_MALLOC_ERROR();
-        goto free_glyphs;
+        goto error_exit;
     }
+
     memset(atlasBuffer, 0, atlasSpan.w * atlasSpan.h);
 
-    for (int i = 0; i < fontInfo.numGlyphs; i++) {
+    for (int i = 0; i < glyphCount; i++) {
         int index = rects[i].index;
 
         glyphs[index].x = rects[i].x;
@@ -419,15 +499,19 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
     }
     
     free(bitmaps);
+    bitmaps = NULL;
     free(rects);
+    rects = NULL;
 
 
     /* load atlas and glyphs array to opengl */
 
     glGenTextures(1, &font->atlas);
     glBindTexture(GL_TEXTURE_2D, font->atlas);
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);	
-    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexImage2D(
@@ -442,37 +526,128 @@ int bagT_initFont(bagT_Font *font, const char *path, float fontSize, int index)
             atlasBuffer
     );
     glBindTexture(GL_TEXTURE_2D, 0);
+
     free(atlasBuffer);
+    atlasBuffer = NULL;
 
     glGenBuffers(1, &font->glyphs);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, font->glyphs);
     glBufferData(
             GL_SHADER_STORAGE_BUFFER,
-            font->fontInfo.numGlyphs * sizeof(Glyph),
+            glyphCount * sizeof(Glyph),
             glyphs,
             GL_STATIC_DRAW
     );
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
-    free(glyphs);
+
+    font->glyphBuffer = glyphs;
+
+    *fontHandle = font;
 
     return 0;
 
-free_glyphs:
-    free(glyphs);
-free_rects:
-    free(rects);
-free_bitmaps:
-    free(bitmaps);
-free_font:
-    free(font->fontData);
+error_exit:
+    if (glyphs)
+        free(glyphs);
+    if (rects)
+        free(rects);
+    if (bitmaps)
+        free(bitmaps);
+    if (atlasBuffer)
+        free(atlasBuffer);
+    if (font->fontData)
+        free(font->fontData);
+    if (font)
+        free(font);
     return -1;
+}
+
+
+void bagT_bindFont(bagT_Font *font)
+{
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, font->glyphs);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, font->atlas);
 }
 
 
 void bagT_destroyFont(bagT_Font *font)
 {
     free(font->fontData);
+    free(font->glyphBuffer);
     glDeleteTextures(1, &font->atlas);
     glDeleteBuffers(1, &font->glyphs);
+    free(font);
 }
 
+
+int bagT_codepointToGlyphIndex(bagT_Font *font, int codepoint)
+{
+    return stbtt_FindGlyphIndex(&font->fontInfo, codepoint);
+}
+
+
+static unsigned int bagT_UTF8ToUTF32(unsigned char *s, int *offset)
+{
+    if ((s[0] & 0x80) == 0) {
+        *offset = 1;
+        return s[0];
+    }
+
+    if ((s[0] & 0xE0) == 0xC0) {
+        *offset = 2;
+        return ((s[0] & 0x1F) << 6) |
+                (s[1] & 0x3F);
+    }
+
+    if ((s[0] & 0xF0) == 0xE0) {
+        *offset = 3;
+        return ((s[0] & 0x0F) << 12) |
+               ((s[1] & 0x3F) << 6)  |
+                (s[2] & 0x3F);
+    }
+
+    if ((s[0] & 0xF8) == 0xF0) {
+        *offset = 4;
+        return ((s[0] & 0x07) << 18) |
+               ((s[1] & 0x3F) << 12) |
+               ((s[2] & 0x3F) << 6)  |
+                (s[3] & 0x3F);
+    }
+
+    *offset = 0;
+    return 0;
+}
+
+
+int bagT_UTF8ToGlyphIndex(bagT_Font *font, const unsigned char *ch, int *offset)
+{
+    return stbtt_FindGlyphIndex(&font->fontInfo, bagT_UTF8ToUTF32(ch, offset));
+}
+
+
+void bagT_getOffset(bagT_Font *font, int glyphIndex, int *x, int *y)
+{
+    *x = font->glyphBuffer[glyphIndex].xOff;
+    *y = font->glyphBuffer[glyphIndex].yOff;
+}
+
+
+float bagT_getAdvance(bagT_Font *font, int glyphIndex)
+{
+    int advance, lsb;
+    stbtt_GetGlyphHMetrics(&font->fontInfo, glyphIndex, &advance, &lsb);
+    return advance * font->fontScale;
+}
+
+
+float bagT_getKerning(bagT_Font *font, int glyphIndex1, int glyphIndex2)
+{
+    return 0;
+}
+
+
+int bagT_renderChars(bagT_Char *chars, int count, int x, int y)
+{
+    return 0;
+}
