@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "bag_engine.h"
 #include "bag_keys.h"
@@ -44,11 +45,22 @@ int bagE_main(int argc, char *argv[])
         return -1;
     }
 
-    bagT_Font *font;
-    if (bagT_initFont(&font, "JetBrainsMono/regular.ttf", 20, 0)) {
+    bagT_Font *font = bagT_initFont("JetBrainsMono/regular.ttf", 0);
+    if (!font) {
         fprintf(stderr, "Failed to load font!\n");
         return -1;
     }
+
+    bagT_Instance *instance = bagT_instantiate(font, 20);
+    if (!instance) {
+        fprintf(stderr, "Failed to instantiate font!\n");
+        return -1;
+    }
+
+    const char *testString = "ÓMĚGÁĹÝĽ";
+
+    printf("strlen: %ld\n", strlen(testString));
+    printf("UTF8len: %d\n", bagT_UTF8Length((const unsigned char*)testString));
 
     int maxUniformBlockSize;
     glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &maxUniformBlockSize);
@@ -77,6 +89,7 @@ int bagE_main(int argc, char *argv[])
         bagE_swapBuffers();
     }
 
+    bagT_destroyInstance(instance);
     bagT_destroyFont(font);
     bagT_destroy();
 

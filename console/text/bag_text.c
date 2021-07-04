@@ -4,23 +4,25 @@
  * [X] void bagT_useProgram(bagT_Program program);
  * [X] void bagT_destroy();
  *
- * [X] int bagT_initFont(bagT_Font **font, const char *path, float fontSize, int index);
- * [X] void bagT_bindFont(bagT_Font *font);
+ * [X] bagT_Font *bagT_initFont(const char *path, int index);
+ * [X] bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize);
+ * [X] void bagT_bindInstance(bagT_Instance *instance);
  * [X] void bagT_destroyFont(bagT_Font *font);
+ * [X] void bagT_destroyInstance(bagT_Instance *font);
  *
  * [ ] int bagT_allocateMemory(bagT_Memory **memory, int length, bagT_MemoryType type);
  * [ ] int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
  * [ ] void bagT_bindMemory(bagT_Memory *memory);
  * [ ] int bagT_freeMemory(bagT_Memory *memory);
  *
- * [X] int bagT_codepointToGlyphIndex(bagT_Font *font, int codepoint);
- * [X] int bagT_UTF8ToGlyphIndex(bagT_Font *font, const unsigned char *ch, int *offset);
- * [X] void bagT_getOffset(bagT_Font *font, int glyphIndex, int *x, int *y);
- * [X] int bagT_getAdvance(bagT_Font *font, int glyphIndex);
- * [ ] float bagT_getKerning(bagT_Font *font, int glyphIndex1, int glyphIndex2);
- * [ ] float bagT_getLineHeight(bagT_Font *font);
+ * [X] int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint);
+ * [X] int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
+ * [X] void bagT_getOffset(bagT_Instance *instance, int glyphIndex, int *x, int *y);
+ * [X] int bagT_getAdvance(bagT_Instance *instance, int glyphIndex);
+ * [ ] float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2);
+ * [ ] float bagT_getLineHeight(bagT_Instance *instance);
  *
- * [ ] int bagT_UTF8Length(const unsigned char *string);
+ * [X] int bagT_UTF8Length(const unsigned char *string);
  *
  * [ ] int bagT_renderUTF8String(
  *             const char *string,
@@ -86,10 +88,14 @@ struct bagT_Font
 {
     stbtt_fontinfo fontInfo;
     unsigned char *fontData;
+};
+
+
+struct bagT_Instance
+{
+    bagT_Font *font;
     float fontScale;
-
     Glyph *glyphBuffer;
-
     unsigned int atlas;
     unsigned int glyphs;
 };
@@ -238,16 +244,11 @@ static int bagT_loadShader(
     return 0;
 
 error_exit:
-    if (fragmentSource)
-        free(fragmentSource);
-    if (vertexSource)
-        free(vertexSource);
-    if (vertex)
-        glDeleteShader(vertex);
-    if (fragment)
-        glDeleteShader(fragment);
-    if (program)
-        glDeleteProgram(program);
+    free(fragmentSource);
+    free(vertexSource);
+    glDeleteShader(vertex);
+    glDeleteShader(fragment);
+    glDeleteProgram(program);
     return -1;
 }
 
@@ -356,13 +357,8 @@ static inline void bagT_writeBitmap(
 }
 
 
-int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int index)
+bagT_Font *bagT_initFont(const char *path, int index)
 {
-    unsigned char **bitmaps = NULL;
-    Rectangle *rects = NULL;
-    Glyph *glyphs = NULL;
-    unsigned char *atlasBuffer = NULL;
-
     bagT_Font *font = malloc(sizeof(bagT_Font));
     if (!font) {
         BAGT_MALLOC_ERROR();
@@ -420,7 +416,30 @@ int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int 
         goto error_exit;
     }
 
-    font->fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
+    return font;
+
+error_exit:
+    free(font->fontData);
+    free(font);
+    return NULL;
+}
+
+
+bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
+{
+    unsigned char **bitmaps = NULL;
+    Rectangle *rects = NULL;
+    Glyph *glyphs = NULL;
+    unsigned char *atlasBuffer = NULL;
+
+    bagT_Instance *instance = malloc(sizeof(bagT_Instance));
+    if (!instance) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+
+    instance->font = font;
+    instance->fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
 
     
     /* build atlas and glyphs array */
@@ -450,19 +469,21 @@ int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int 
         unsigned char *bitmap = stbtt_GetGlyphBitmap(
                 &font->fontInfo,
                 0,
-                font->fontScale,
+                instance->fontScale,
                 i,
                 &width, &height,
                 &xOff, &yOff
         );
 
         bitmaps[i] = bitmap;
+
         rects[i].x = 0;
         rects[i].y = 0;
         rects[i].w = width;
         rects[i].h = height;
         rects[i].flags = 0;
         rects[i].index = i;
+
         glyphs[i].w = width;
         glyphs[i].h = height;
         glyphs[i].xOff = xOff;
@@ -506,8 +527,8 @@ int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int 
 
     /* load atlas and glyphs array to opengl */
 
-    glGenTextures(1, &font->atlas);
-    glBindTexture(GL_TEXTURE_2D, font->atlas);
+    glGenTextures(1, &instance->atlas);
+    glBindTexture(GL_TEXTURE_2D, instance->atlas);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_BASE_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL, 0);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);	
@@ -530,8 +551,8 @@ int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int 
     free(atlasBuffer);
     atlasBuffer = NULL;
 
-    glGenBuffers(1, &font->glyphs);
-    glBindBuffer(GL_SHADER_STORAGE_BUFFER, font->glyphs);
+    glGenBuffers(1, &instance->glyphs);
+    glBindBuffer(GL_SHADER_STORAGE_BUFFER, instance->glyphs);
     glBufferData(
             GL_SHADER_STORAGE_BUFFER,
             glyphCount * sizeof(Glyph),
@@ -540,54 +561,51 @@ int bagT_initFont(bagT_Font **fontHandle, const char *path, float fontSize, int 
     );
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
 
-    font->glyphBuffer = glyphs;
+    instance->glyphBuffer = glyphs;
 
-    *fontHandle = font;
-
-    return 0;
+    return instance;
 
 error_exit:
-    if (glyphs)
-        free(glyphs);
-    if (rects)
-        free(rects);
-    if (bitmaps)
-        free(bitmaps);
-    if (atlasBuffer)
-        free(atlasBuffer);
-    if (font->fontData)
-        free(font->fontData);
-    if (font)
-        free(font);
-    return -1;
+    free(glyphs);
+    free(rects);
+    free(bitmaps);
+    free(atlasBuffer);
+    free(instance);
+    return NULL;
 }
 
 
-void bagT_bindFont(bagT_Font *font)
+void bagT_bindInstance(bagT_Instance *instance)
 {
-    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, font->glyphs);
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, instance->glyphs);
     glActiveTexture(GL_TEXTURE0);
-    glBindTexture(GL_TEXTURE_2D, font->atlas);
+    glBindTexture(GL_TEXTURE_2D, instance->atlas);
 }
 
 
 void bagT_destroyFont(bagT_Font *font)
 {
     free(font->fontData);
-    free(font->glyphBuffer);
-    glDeleteTextures(1, &font->atlas);
-    glDeleteBuffers(1, &font->glyphs);
     free(font);
 }
 
 
-int bagT_codepointToGlyphIndex(bagT_Font *font, int codepoint)
+void bagT_destroyInstance(bagT_Instance *instance)
 {
-    return stbtt_FindGlyphIndex(&font->fontInfo, codepoint);
+    free(instance->glyphBuffer);
+    glDeleteTextures(1, &instance->atlas);
+    glDeleteBuffers(1, &instance->glyphs);
+    free(instance);
 }
 
 
-static unsigned int bagT_UTF8ToUTF32(unsigned char *s, int *offset)
+int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint)
+{
+    return stbtt_FindGlyphIndex(&(instance->font->fontInfo), codepoint);
+}
+
+
+static unsigned int bagT_UTF8ToUTF32(const unsigned char *s, int *offset)
 {
     if ((s[0] & 0x80) == 0) {
         *offset = 1;
@@ -620,34 +638,54 @@ static unsigned int bagT_UTF8ToUTF32(unsigned char *s, int *offset)
 }
 
 
-int bagT_UTF8ToGlyphIndex(bagT_Font *font, const unsigned char *ch, int *offset)
+static unsigned int bagT_UTF8Width(const unsigned char *s)
 {
-    return stbtt_FindGlyphIndex(&font->fontInfo, bagT_UTF8ToUTF32(ch, offset));
+    if ((s[0] & 0x80) == 0)
+        return 1;
+
+    if ((s[0] & 0xE0) == 0xC0)
+        return 2;
+
+    if ((s[0] & 0xF0) == 0xE0)
+        return 3;
+
+    if ((s[0] & 0xF8) == 0xF0)
+        return 4;
+
+    return 0;
 }
 
 
-void bagT_getOffset(bagT_Font *font, int glyphIndex, int *x, int *y)
+int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset)
 {
-    *x = font->glyphBuffer[glyphIndex].xOff;
-    *y = font->glyphBuffer[glyphIndex].yOff;
+    return stbtt_FindGlyphIndex(&(instance->font->fontInfo), bagT_UTF8ToUTF32(ch, offset));
 }
 
 
-float bagT_getAdvance(bagT_Font *font, int glyphIndex)
+void bagT_getOffset(bagT_Instance *instance, int glyphIndex, int *x, int *y)
+{
+    *x = instance->glyphBuffer[glyphIndex].xOff;
+    *y = instance->glyphBuffer[glyphIndex].yOff;
+}
+
+
+float bagT_getAdvance(bagT_Instance *instance, int glyphIndex)
 {
     int advance, lsb;
-    stbtt_GetGlyphHMetrics(&font->fontInfo, glyphIndex, &advance, &lsb);
-    return advance * font->fontScale;
+    stbtt_GetGlyphHMetrics(&(instance->font->fontInfo), glyphIndex, &advance, &lsb);
+    return advance * instance->fontScale;
 }
 
 
-float bagT_getKerning(bagT_Font *font, int glyphIndex1, int glyphIndex2)
+int bagT_UTF8Length(const unsigned char *string)
 {
-    return 0;
+    int offset = 0, length = 0;
+    for (; string[offset]; offset += bagT_UTF8Width(string + offset), length++);
+    return length;
 }
 
 
 int bagT_renderChars(bagT_Char *chars, int count, int x, int y)
 {
-    return 0;
+    
 }
