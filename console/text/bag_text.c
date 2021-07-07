@@ -1,3 +1,7 @@
+// FIXME: error handling when no instance bound
+//        truncate when maximum simple string size exceeded
+//        error when converting illegal UTF8
+
 /* TODO
  * [X] int bagT_init(int screenWidth, int screenHeight);
  * [X] void bagT_updateResolution(int screenWidth, int screenHeight);
@@ -7,6 +11,7 @@
  * [X] bagT_Font *bagT_initFont(const char *path, int index);
  * [X] bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize);
  * [X] void bagT_bindInstance(bagT_Instance *instance);
+ * [X] void bagT_unbindInstance();
  * [X] void bagT_destroyFont(bagT_Font *font);
  * [X] void bagT_destroyInstance(bagT_Instance *font);
  *
@@ -19,27 +24,27 @@
  * [X] int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
  * [X] void bagT_getOffset(bagT_Instance *instance, int glyphIndex, int *x, int *y);
  * [X] int bagT_getAdvance(bagT_Instance *instance, int glyphIndex);
- * [ ] float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2);
- * [ ] float bagT_getLineHeight(bagT_Instance *instance);
+ * [X] float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2);
+ * [X] bagT_VMetrics bagT_getVMetrics(bagT_Instance *instance);
  *
  * [X] int bagT_UTF8Length(const unsigned char *string);
  *
- * [ ] int bagT_renderUTF8String(
+ * [X] void bagT_renderUTF8String(
  *             const char *string,
  *             int x, int y,
  *             bagT_Compositor compositor,
- *             float maxLength
+ *             void *compositorData
  *     );
  *
- * [ ] int bagT_renderCodepoints(
+ * [ ] void bagT_renderCodepoints(
  *             int *codepoints,
  *             int count,
  *             int x, int y,
  *             bagT_Compositor compositor,
- *             float maxLength
+ *             void *compositorData
  *     );
  *
- * [ ] int bagT_renderChars(bagT_Char *chars, int count, int x, int y);
+ * [X] void bagT_renderChars(bagT_Char *chars, int count, int x, int y);
  *
  * [ ] int bagT_renderMemory(int index, int count, int x, int y);
  */
@@ -96,6 +101,7 @@ struct bagT_Instance
     bagT_Font *font;
     float fontScale;
     Glyph *glyphBuffer;
+    unsigned int vao;
     unsigned int atlas;
     unsigned int glyphs;
 };
@@ -125,6 +131,15 @@ struct BagT
 {
     bagT_Shader simple;
     bagT_Shader memory;
+
+    int color;
+
+    bagT_Instance *boundInstance;
+
+    struct {
+        int glyphIndexBuffer[BAGT_MAX_RENDER_STRING_LENGTH];
+        bagT_Char charBuffer[BAGT_MAX_RENDER_STRING_LENGTH];
+    } scratch;
 } bagT;
 
 
@@ -260,6 +275,8 @@ error_exit:
 
 int bagT_init(int screenWidth, int screenHeight)
 {
+    bagT.color = 0xffffffff;
+
     int result = bagT_loadShader(
             "shaders/simple_vert.glsl",
             "shaders/simple_frag.glsl",
@@ -551,6 +568,9 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
     free(atlasBuffer);
     atlasBuffer = NULL;
 
+    glGenVertexArrays(1, &instance->vao);
+    glBindVertexArray(instance->vao);
+
     glGenBuffers(1, &instance->glyphs);
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, instance->glyphs);
     glBufferData(
@@ -560,6 +580,7 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
             GL_STATIC_DRAW
     );
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
+    glBindVertexArray(0);
 
     instance->glyphBuffer = glyphs;
 
@@ -577,9 +598,20 @@ error_exit:
 
 void bagT_bindInstance(bagT_Instance *instance)
 {
+    glBindVertexArray(instance->vao);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, instance->glyphs);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, instance->atlas);
+    bagT.boundInstance = instance;
+}
+
+
+void bagT_unbindInstance()
+{
+    glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, 0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+    glBindVertexArray(0);
+    bagT.boundInstance = NULL;
 }
 
 
@@ -677,6 +709,27 @@ float bagT_getAdvance(bagT_Instance *instance, int glyphIndex)
 }
 
 
+float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2)
+{
+    return instance->fontScale
+         * stbtt_GetGlyphKernAdvance(&(instance->font->fontInfo), glyphIndex1, glyphIndex2);
+}
+
+
+bagT_VMetrics bagT_getVMetrics(bagT_Instance *instance)
+{
+    int ascent, descent, lineGap;
+    stbtt_GetFontVMetrics(&(instance->font->fontInfo), &ascent, &descent, &lineGap);
+
+    bagT_VMetrics metrics = {
+        ascent * instance->fontScale,
+        descent * instance->fontScale,
+        lineGap * instance->fontScale
+    };
+    return metrics;
+}
+
+
 int bagT_UTF8Length(const unsigned char *string)
 {
     int offset = 0, length = 0;
@@ -685,7 +738,96 @@ int bagT_UTF8Length(const unsigned char *string)
 }
 
 
-int bagT_renderChars(bagT_Char *chars, int count, int x, int y)
+static void bagT_fallbackCompositor(void *data, bagT_Char *chars, int *glyphIndices, int length)
 {
-    
+    bagT_VMetrics vMetrics = bagT_getVMetrics(bagT.boundInstance);
+    float xPos = 0;
+
+    for (int i = 0; i < length; i++) {
+        int glyphIndex = glyphIndices[i];
+
+        chars[i].x = xPos;
+        chars[i].y = vMetrics.ascent;
+        chars[i].color = bagT.color;
+        chars[i].glyphIndex = glyphIndex;
+
+        float advance = bagT_getAdvance(bagT.boundInstance, glyphIndex);
+        xPos += advance;
+
+        if (i < length - 1) {
+            xPos += bagT_getKerning(bagT.boundInstance, glyphIndex, glyphIndices[i + 1]);
+        }
+    }
+}
+
+
+void bagT_renderUTF8String(
+        const char *string,
+        int x, int y,
+        bagT_Compositor compositor,
+        void *compositorData
+) {
+    int length = bagT_UTF8Length((const unsigned char*)string);
+
+    int move;
+    for (int i = 0; i < length; i++) {
+        bagT.scratch.glyphIndexBuffer[i] = bagT_UTF8ToGlyphIndex(
+                bagT.boundInstance,
+                (const unsigned char*)string,
+                &move
+        );
+        string += move;
+    }
+
+    if (!compositor) {
+        compositor = &bagT_fallbackCompositor;
+    }
+
+    compositor(
+            compositorData,
+            bagT.scratch.charBuffer,
+            bagT.scratch.glyphIndexBuffer, 
+            length
+    );
+
+    bagT_renderChars(bagT.scratch.charBuffer, length, x, y);
+}
+
+
+void bagT_renderCodepoints(
+        int *codepoints,
+        int count,
+        int x, int y,
+        bagT_Compositor compositor,
+        void *compositorData
+) {
+    for (int i = 0; i < count; i++) {
+        bagT.scratch.glyphIndexBuffer[i] = bagT_codepointToGlyphIndex(
+                bagT.boundInstance,
+                codepoints[i]
+        );
+    }
+
+    if (!compositor) {
+        compositor = &bagT_fallbackCompositor;
+    }
+
+    compositor(
+            compositorData,
+            bagT.scratch.charBuffer,
+            bagT.scratch.glyphIndexBuffer, 
+            count
+    );
+
+    bagT_renderChars(bagT.scratch.charBuffer, count, x, y);
+}
+
+
+void bagT_renderChars(bagT_Char *chars, int count, int x, int y)
+{
+    glProgramUniform2i(bagT.simple.shaderProgram, bagT.simple.uni.position, x, y);
+    glProgramUniform4iv(bagT.simple.shaderProgram, bagT.simple.uni.chars, count, (int*)chars);
+    glUseProgram(bagT.simple.shaderProgram);
+    glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count);
+    glUseProgram(0);
 }

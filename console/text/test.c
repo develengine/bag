@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "bag_engine.h"
 #include "bag_keys.h"
@@ -23,7 +24,7 @@ void GLAPIENTRY openglCallback(
 ) {
     int error = type == GL_DEBUG_TYPE_ERROR;
 
-    printf("[%s] type: %d, severity: %d\n%s\n",
+    fprintf(stderr, "[%s] type: %d, severity: %d\n%s\n",
             error ? "\033[1;31mERROR\033[0m" : "\033[1mINFO\033[0m",
             type, severity, message
     );
@@ -57,7 +58,7 @@ int bagE_main(int argc, char *argv[])
         return -1;
     }
 
-    const char *testString = "ÓMĚGÁĹÝĽ";
+    const char *testString = "ÔMĚGÁ Ĺ Ý Ľ";
 
     printf("strlen: %ld\n", strlen(testString));
     printf("UTF8len: %d\n", bagT_UTF8Length((const unsigned char*)testString));
@@ -67,12 +68,6 @@ int bagE_main(int argc, char *argv[])
     printf("mubs: %d\n", maxUniformBlockSize);
 
     bagE_setSwapInterval(1);
-
-    while (running) {
-        bagE_pollEvents();
-
-        if (!running)
-            break;
 
 #if 1
         glClearColor(
@@ -84,7 +79,33 @@ int bagE_main(int argc, char *argv[])
 #else
         glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 #endif
+
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    bagT_bindInstance(instance);
+
+    time_t t = 0;
+    int frames = 0;
+
+    while (running) {
+        bagE_pollEvents();
+
+        if (!running)
+            break;
+
+        time_t nt;
+        time(&nt);
+        if (nt != t) {
+            printf("frames: %d\n", frames);
+            frames = 0;
+            t = nt;
+        }
+        ++frames;
+
         glClear(GL_COLOR_BUFFER_BIT);
+
+        bagT_renderUTF8String(testString, 100, 100, NULL, NULL);
 
         bagE_swapBuffers();
     }
