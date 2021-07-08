@@ -83,7 +83,10 @@ int bagE_main(int argc, char *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
+    bagT_setColor(0.1f, 1.0f, 0.1f, 1.0f);
+
     bagT_bindInstance(instance);
+    bagT_useProgram(bagT_SimpleProgram);
 
     time_t t = 0;
     int frames = 0;
@@ -109,6 +112,8 @@ int bagE_main(int argc, char *argv[])
 
         bagE_swapBuffers();
     }
+
+    bagT_useProgram(bagT_NoProgram);
 
     bagT_destroyInstance(instance);
     bagT_destroyFont(font);

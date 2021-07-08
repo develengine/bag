@@ -27,11 +27,12 @@ out V_OUT
 uniform ivec2 u_screenRes;
 uniform ivec2 u_position;
 uniform ivec4 u_chars[MAX_CHARS_LENGTH];
-/* .x - x screen coordinate
- * .y - y screen coordinate
+/* .x - x coordinate
+ * .y - y coordinate
  * .z - color
  * .w - glyph index
  */
+
 
 struct Glyph
 {

@@ -1,11 +1,13 @@
 // FIXME: error handling when no instance bound
 //        truncate when maximum simple string size exceeded
 //        error when converting illegal UTF8
+//        add opengl object freeing to error exits
 
 /* TODO
  * [X] int bagT_init(int screenWidth, int screenHeight);
  * [X] void bagT_updateResolution(int screenWidth, int screenHeight);
  * [X] void bagT_useProgram(bagT_Program program);
+ * [X] void bagT_setColor(float r, float g, float b, float a);
  * [X] void bagT_destroy();
  *
  * [X] bagT_Font *bagT_initFont(const char *path, int index);
@@ -15,7 +17,7 @@
  * [X] void bagT_destroyFont(bagT_Font *font);
  * [X] void bagT_destroyInstance(bagT_Instance *font);
  *
- * [ ] int bagT_allocateMemory(bagT_Memory **memory, int length, bagT_MemoryType type);
+ * [ ] bagT_Memory *bagT_allocateMemory(void *data, int length, bagT_MemoryType type);
  * [ ] int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
  * [ ] void bagT_bindMemory(bagT_Memory *memory);
  * [ ] int bagT_freeMemory(bagT_Memory *memory);
@@ -118,6 +120,8 @@ typedef struct
     unsigned int vertexShader;
     unsigned int fragmentShader;
     unsigned int shaderProgram;
+
+    int inUse;
 
     struct {
         int screenRes;
@@ -296,6 +300,8 @@ int bagT_init(int screenWidth, int screenHeight)
     bagT.simple.uni.chars     = glGetUniformLocation(bagT.simple.shaderProgram, "u_chars");
     BAGT_UNIFORM_CHECK(bagT.simple.uni.chars, "u_chars");
 
+    bagT.simple.inUse = 0;
+
     result = bagT_loadShader(
             "shaders/memory_vert.glsl",
             "shaders/memory_frag.glsl",
@@ -313,6 +319,8 @@ int bagT_init(int screenWidth, int screenHeight)
     BAGT_UNIFORM_CHECK(bagT.memory.uni.screenRes, "u_screenRes");
     bagT.memory.uni.position  = glGetUniformLocation(bagT.memory.shaderProgram, "u_position");
     BAGT_UNIFORM_CHECK(bagT.memory.uni.position, "u_position");
+
+    bagT.memory.inUse = 0;
 
     bagT_updateResolution(screenWidth, screenHeight);
 
@@ -341,16 +349,37 @@ void bagT_useProgram(bagT_Program program)
     {
         case bagT_NoProgram:
             glUseProgram(0);
+            if (bagT.memory.inUse) {
+                glDisableVertexAttribArray(0);
+            }
+            bagT.simple.inUse = 0;
+            bagT.memory.inUse = 0;
             break;
 
         case bagT_SimpleProgram:
-            glUseProgram(bagT.simple.shaderProgram);
+            if (!bagT.simple.inUse) {
+                glUseProgram(bagT.simple.shaderProgram);
+                bagT.simple.inUse = 1;
+            }
             break;
 
         case bagT_MemoryProgram:
-            glUseProgram(bagT.memory.shaderProgram);
+            if (!bagT.memory.inUse) {
+                glUseProgram(bagT.memory.shaderProgram);
+                glEnableVertexAttribArray(0);
+                bagT.memory.inUse = 1;
+            }
             break;
     }
+}
+
+
+void bagT_setColor(float r, float g, float b, float a)
+{
+    bagT.color = ((int)(a * 255) << 24)
+               | ((int)(b * 255) << 16)
+               | ((int)(g * 255) << 8)
+               |  (int)(r * 255);
 }
 
 
@@ -579,6 +608,7 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
             glyphs,
             GL_STATIC_DRAW
     );
+
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     glBindVertexArray(0);
 
@@ -827,7 +857,5 @@ void bagT_renderChars(bagT_Char *chars, int count, int x, int y)
 {
     glProgramUniform2i(bagT.simple.shaderProgram, bagT.simple.uni.position, x, y);
     glProgramUniform4iv(bagT.simple.shaderProgram, bagT.simple.uni.chars, count, (int*)chars);
-    glUseProgram(bagT.simple.shaderProgram);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count);
-    glUseProgram(0);
 }

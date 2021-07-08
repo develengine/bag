@@ -15,6 +15,14 @@ const vec2 data[6] = {
 };
 
 
+layout(location = 0) in ivec4 ch;
+/* .x - x coordinate
+ * .y - y coordinate
+ * .z - color
+ * .w - glyph index
+ */
+
+
 out V_OUT
 {
     flat ivec2 origin;
@@ -26,12 +34,7 @@ out V_OUT
 
 uniform ivec2 u_screenRes;
 uniform ivec2 u_position;
-uniform ivec4 u_chars[MAX_CHARS_LENGTH];
-/* .x - x screen coordinate
- * .y - y screen coordinate
- * .z - color
- * .w - glyph index
- */
+
 
 struct Glyph
 {
@@ -51,7 +54,6 @@ layout(std430, binding = 0) readonly buffer GlyphBuffer
 
 void main()
 {
-    ivec4 ch    = u_chars[gl_InstanceID];
     Glyph glyph = glyphs[ch.w];
 
     ivec2 ipos  = u_position + ch.xy + ivec2(glyph.xOff, glyph.yOff);

@@ -53,6 +53,7 @@ typedef void (*bagT_Compositor) (void*, bagT_Char *, int*, int);
 int bagT_init(int screenWidth, int screenHeight);
 void bagT_updateResolution(int screenWidth, int screenHeight);
 void bagT_useProgram(bagT_Program program);
+void bagT_setColor(float r, float g, float b, float a);
 void bagT_destroy();
 
 bagT_Font *bagT_initFont(const char *path, int index);
@@ -62,7 +63,7 @@ void bagT_unbindInstance();
 void bagT_destroyFont(bagT_Font *font);
 void bagT_destroyInstance(bagT_Instance *instance);
 
-int bagT_allocateMemory(bagT_Memory **memory, int length, bagT_MemoryType type);
+bagT_Memory *bagT_allocateMemory(void *data, int length, bagT_MemoryType type);
 int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
 void bagT_bindMemory(bagT_Memory *memory);
 int bagT_freeMemory(bagT_Memory *memory);
