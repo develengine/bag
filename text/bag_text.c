@@ -17,10 +17,19 @@
  * [X] void bagT_destroyFont(bagT_Font *font);
  * [X] void bagT_destroyInstance(bagT_Instance *font);
  *
- * [ ] bagT_Memory *bagT_allocateMemory(void *data, int length, bagT_MemoryType type);
- * [ ] int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
- * [ ] void bagT_bindMemory(bagT_Memory *memory);
- * [ ] int bagT_freeMemory(bagT_Memory *memory);
+ * [X] bagT_Memory *bagT_allocateMemory(
+ *             bagT_Instance *instance,
+ *             bagT_Char *data,
+ *             int count,
+ *             bagT_MemoryType type
+ *     );
+ *
+ * [X] void bagT_openMemory(bagT_Memory *memory);
+ * [X] void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
+ * [X] void bagT_closeMemory();
+ * [X] void bagT_bindMemory(bagT_Memory *memory);
+ * [X] void bagT_unbindMemory();
+ * [X] void bagT_freeMemory(bagT_Memory *memory);
  *
  * [X] int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint);
  * [X] int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
@@ -38,7 +47,7 @@
  *             void *compositorData
  *     );
  *
- * [ ] void bagT_renderCodepoints(
+ * [X] void bagT_renderCodepoints(
  *             int *codepoints,
  *             int count,
  *             int x, int y,
@@ -48,7 +57,7 @@
  *
  * [X] void bagT_renderChars(bagT_Char *chars, int count, int x, int y);
  *
- * [ ] int bagT_renderMemory(int index, int count, int x, int y);
+ * [X] int bagT_renderMemory(int index, int count, int x, int y, float w, float y);
  */
 
 #include "bag_text.h"
@@ -111,7 +120,9 @@ struct bagT_Instance
 
 struct bagT_Memory
 {
-    int leMember;
+    bagT_Instance *instance;
+    unsigned int vao;
+    unsigned int memoryBuffer;
 };
 
 
@@ -126,6 +137,7 @@ typedef struct
     struct {
         int screenRes;
         int position;
+        int scale;
         int chars;
     } uni;
 } bagT_Shader;
@@ -299,6 +311,8 @@ int bagT_init(int screenWidth, int screenHeight)
     BAGT_UNIFORM_CHECK(bagT.simple.uni.position, "u_position");
     bagT.simple.uni.chars     = glGetUniformLocation(bagT.simple.shaderProgram, "u_chars");
     BAGT_UNIFORM_CHECK(bagT.simple.uni.chars, "u_chars");
+    bagT.simple.uni.scale     = glGetUniformLocation(bagT.simple.shaderProgram, "u_scale");
+    BAGT_UNIFORM_CHECK(bagT.simple.uni.scale, "u_scale");
 
     bagT.simple.inUse = 0;
 
@@ -319,6 +333,8 @@ int bagT_init(int screenWidth, int screenHeight)
     BAGT_UNIFORM_CHECK(bagT.memory.uni.screenRes, "u_screenRes");
     bagT.memory.uni.position  = glGetUniformLocation(bagT.memory.shaderProgram, "u_position");
     BAGT_UNIFORM_CHECK(bagT.memory.uni.position, "u_position");
+    bagT.memory.uni.scale     = glGetUniformLocation(bagT.memory.shaderProgram, "u_scale");
+    BAGT_UNIFORM_CHECK(bagT.memory.uni.scale, "u_scale");
 
     bagT.memory.inUse = 0;
 
@@ -348,27 +364,18 @@ void bagT_useProgram(bagT_Program program)
     switch (program)
     {
         case bagT_NoProgram:
+            // glDisableVertexAttribArray(0);
             glUseProgram(0);
-            if (bagT.memory.inUse) {
-                glDisableVertexAttribArray(0);
-            }
-            bagT.simple.inUse = 0;
-            bagT.memory.inUse = 0;
             break;
 
         case bagT_SimpleProgram:
-            if (!bagT.simple.inUse) {
-                glUseProgram(bagT.simple.shaderProgram);
-                bagT.simple.inUse = 1;
-            }
+            // glDisableVertexAttribArray(0);
+            glUseProgram(bagT.simple.shaderProgram);
             break;
 
         case bagT_MemoryProgram:
-            if (!bagT.memory.inUse) {
-                glUseProgram(bagT.memory.shaderProgram);
-                glEnableVertexAttribArray(0);
-                bagT.memory.inUse = 1;
-            }
+            glUseProgram(bagT.memory.shaderProgram);
+            // glEnableVertexAttribArray(0);
             break;
     }
 }
@@ -628,7 +635,6 @@ error_exit:
 
 void bagT_bindInstance(bagT_Instance *instance)
 {
-    glBindVertexArray(instance->vao);
     glBindBufferBase(GL_SHADER_STORAGE_BUFFER, 0, instance->glyphs);
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, instance->atlas);
@@ -658,6 +664,99 @@ void bagT_destroyInstance(bagT_Instance *instance)
     glDeleteTextures(1, &instance->atlas);
     glDeleteBuffers(1, &instance->glyphs);
     free(instance);
+}
+
+
+static unsigned int bagT_memoryTypeToDraw(bagT_MemoryType type)
+{
+    switch (type) {
+        case bagT_StaticMemory:
+            return GL_STATIC_DRAW;
+        case bagT_DynamicMemory:
+            return GL_DYNAMIC_DRAW;
+        case bagT_StreamMemory:
+            return GL_STREAM_DRAW;
+        default:
+            return 'S'|'W'|'A'|'G';
+    }
+}
+
+
+bagT_Memory *bagT_allocateMemory(
+        bagT_Instance *instance,
+        bagT_Char *data,
+        int count,
+        bagT_MemoryType type
+) {
+    bagT_Memory *memory = malloc(sizeof(bagT_Memory));
+    if (!memory) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+
+    unsigned int vao;
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+
+    unsigned int memoryBuffer;
+    glGenBuffers(1, &memoryBuffer);
+    glBindBuffer(GL_ARRAY_BUFFER, memoryBuffer);
+    glBufferData(GL_ARRAY_BUFFER, count * sizeof(bagT_Char), (void *)data, bagT_memoryTypeToDraw(type));
+
+    glVertexAttribIPointer(0, sizeof(bagT_Char) / sizeof(int), GL_INT, sizeof(bagT_Char), (void*)0);
+    glVertexAttribDivisor(0, 1);
+
+    glBindVertexArray(0);
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+
+    memory->instance = instance;
+    memory->vao = vao;
+    memory->memoryBuffer = memoryBuffer;
+
+    return memory;
+
+error_exit:
+    return NULL;
+}
+
+
+void bagT_openMemory(bagT_Memory *memory)
+{
+    glBindBuffer(GL_ARRAY_BUFFER, memory->memoryBuffer);
+}
+
+
+void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length)
+{
+    glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(bagT_Char), length * sizeof(bagT_Char), chars);
+}
+
+
+void bagT_closeMemory()
+{
+    glBindBuffer(GL_ARRAY_BUFFER, 0);
+}
+
+
+void bagT_bindMemory(bagT_Memory *memory)
+{
+    glBindVertexArray(memory->vao);
+    glEnableVertexAttribArray(0);
+}
+
+
+void bagT_unbindMemory()
+{
+    glBindVertexArray(0);
+    glDisableVertexAttribArray(0);
+}
+
+
+void bagT_freeMemory(bagT_Memory *memory)
+{
+    glDeleteBuffers(1, &memory->memoryBuffer);
+    glDeleteVertexArrays(1, &memory->vao);
+    free(memory);
 }
 
 
@@ -768,9 +867,14 @@ int bagT_UTF8Length(const unsigned char *string)
 }
 
 
-static void bagT_fallbackCompositor(void *data, bagT_Char *chars, int *glyphIndices, int length)
-{
-    bagT_VMetrics vMetrics = bagT_getVMetrics(bagT.boundInstance);
+void bagT_fallbackCompositor(
+        bagT_Instance *instance, 
+        void *data,
+        bagT_Char *chars,
+        int *glyphIndices,
+        int length
+) {
+    bagT_VMetrics vMetrics = bagT_getVMetrics(instance);
     float xPos = 0;
 
     for (int i = 0; i < length; i++) {
@@ -781,11 +885,11 @@ static void bagT_fallbackCompositor(void *data, bagT_Char *chars, int *glyphIndi
         chars[i].color = bagT.color;
         chars[i].glyphIndex = glyphIndex;
 
-        float advance = bagT_getAdvance(bagT.boundInstance, glyphIndex);
+        float advance = bagT_getAdvance(instance, glyphIndex);
         xPos += advance;
 
         if (i < length - 1) {
-            xPos += bagT_getKerning(bagT.boundInstance, glyphIndex, glyphIndices[i + 1]);
+            xPos += bagT_getKerning(instance, glyphIndex, glyphIndices[i + 1]);
         }
     }
 }
@@ -794,6 +898,7 @@ static void bagT_fallbackCompositor(void *data, bagT_Char *chars, int *glyphIndi
 void bagT_renderUTF8String(
         const char *string,
         int x, int y,
+        float w, float h,
         bagT_Compositor compositor,
         void *compositorData
 ) {
@@ -814,13 +919,14 @@ void bagT_renderUTF8String(
     }
 
     compositor(
+            bagT.boundInstance,
             compositorData,
             bagT.scratch.charBuffer,
             bagT.scratch.glyphIndexBuffer, 
             length
     );
 
-    bagT_renderChars(bagT.scratch.charBuffer, length, x, y);
+    bagT_renderChars(bagT.scratch.charBuffer, length, x, y, w, h);
 }
 
 
@@ -828,6 +934,7 @@ void bagT_renderCodepoints(
         int *codepoints,
         int count,
         int x, int y,
+        float w, float h,
         bagT_Compositor compositor,
         void *compositorData
 ) {
@@ -843,19 +950,31 @@ void bagT_renderCodepoints(
     }
 
     compositor(
+            bagT.boundInstance,
             compositorData,
             bagT.scratch.charBuffer,
             bagT.scratch.glyphIndexBuffer, 
             count
     );
 
-    bagT_renderChars(bagT.scratch.charBuffer, count, x, y);
+    bagT_renderChars(bagT.scratch.charBuffer, count, x, y, w, h);
 }
 
 
-void bagT_renderChars(bagT_Char *chars, int count, int x, int y)
+void bagT_renderChars(bagT_Char *chars, int count, int x, int y, float w, float h)
 {
+    glBindVertexArray(bagT.boundInstance->vao);
     glProgramUniform2i(bagT.simple.shaderProgram, bagT.simple.uni.position, x, y);
+    glProgramUniform2f(bagT.simple.shaderProgram, bagT.simple.uni.scale, w, h);
     glProgramUniform4iv(bagT.simple.shaderProgram, bagT.simple.uni.chars, count, (int*)chars);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count);
+    glBindVertexArray(0);
+}
+
+
+void bagT_renderMemory(int index, int count, int x, int y, float w, float h)
+{
+    glProgramUniform2i(bagT.memory.shaderProgram, bagT.memory.uni.position, x, y);
+    glProgramUniform2f(bagT.memory.shaderProgram, bagT.memory.uni.scale, w, h);
+    glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 6, count, index);
 }

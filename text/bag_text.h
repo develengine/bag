@@ -26,11 +26,11 @@ typedef enum
 struct bagT_Font;
 typedef struct bagT_Font bagT_Font;
 
-struct bagT_Memory;
-typedef struct bagT_Memory bagT_Memory;
-
 struct bagT_Instance;
 typedef struct bagT_Instance bagT_Instance;
+
+struct bagT_Memory;
+typedef struct bagT_Memory bagT_Memory;
 
 typedef struct
 {
@@ -47,7 +47,7 @@ typedef struct
     float lineGap;
 } bagT_VMetrics;
 
-typedef void (*bagT_Compositor) (void*, bagT_Char *, int*, int);
+typedef void (*bagT_Compositor) (bagT_Instance *, void*, bagT_Char *, int*, int);
 
 
 int bagT_init(int screenWidth, int screenHeight);
@@ -63,10 +63,19 @@ void bagT_unbindInstance();
 void bagT_destroyFont(bagT_Font *font);
 void bagT_destroyInstance(bagT_Instance *instance);
 
-bagT_Memory *bagT_allocateMemory(void *data, int length, bagT_MemoryType type);
-int bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
+bagT_Memory *bagT_allocateMemory(
+        bagT_Instance *instance,
+        bagT_Char *data,
+        int count,
+        bagT_MemoryType type
+);
+
+void bagT_openMemory(bagT_Memory *memory);
+void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
+void bagT_closeMemory();
 void bagT_bindMemory(bagT_Memory *memory);
-int bagT_freeMemory(bagT_Memory *memory);
+void bagT_unbindMemory();
+void bagT_freeMemory(bagT_Memory *memory);
 
 int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint);
 int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
@@ -80,6 +89,7 @@ int bagT_UTF8Length(const unsigned char *string);
 void bagT_renderUTF8String(
         const char *string,
         int x, int y,
+        float w, float h,
         bagT_Compositor compositor,
         void *compositorData
 );
@@ -88,12 +98,15 @@ void bagT_renderCodepoints(
         int *codepoints,
         int count,
         int x, int y,
+        float w, float h,
         bagT_Compositor compositor,
         void *compositorData
 );
 
-void bagT_renderChars(bagT_Char *chars, int count, int x, int y);
+void bagT_renderChars(bagT_Char *chars, int count, int x, int y, float w, float h);
 
-int bagT_renderMemory(int index, int count, int x, int y);
+void bagT_renderMemory(int index, int count, int x, int y, float w, float h);
+
+void bagT_fallbackCompositor(bagT_Instance *instance, void *data, bagT_Char *chars, int *glyphIndices, int length);
 
 #endif

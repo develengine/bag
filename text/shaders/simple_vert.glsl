@@ -26,6 +26,7 @@ out V_OUT
 
 uniform ivec2 u_screenRes;
 uniform ivec2 u_position;
+uniform vec2 u_scale;
 uniform ivec4 u_chars[MAX_CHARS_LENGTH];
 /* .x - x coordinate
  * .y - y coordinate
@@ -55,9 +56,11 @@ void main()
     ivec4 ch    = u_chars[gl_InstanceID];
     Glyph glyph = glyphs[ch.w];
 
-    ivec2 ipos  = u_position + ch.xy + ivec2(glyph.xOff, glyph.yOff);
+    ivec2 ipos  = u_position + ivec2(ch.xy * u_scale)
+                + ivec2(glyph.xOff * u_scale.x, glyph.yOff * u_scale.y);
     vec2 coord  = data[gl_VertexID];
-    vec2 scoord = coord * (vec2(glyph.w, glyph.h) / u_screenRes) + (vec2(ipos) / u_screenRes);
+    vec2 scoord = coord * ((vec2(glyph.w, glyph.h) * u_scale) / u_screenRes)
+                + (vec2(ipos) / u_screenRes);
     vec2 vcoord = vec2(scoord.x, 1.0 - scoord.y) * 2.0 - 1.0;
 
     frag.origin = ivec2(glyph.x, glyph.y);

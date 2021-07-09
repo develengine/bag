@@ -52,16 +52,32 @@ int bagE_main(int argc, char *argv[])
         return -1;
     }
 
-    bagT_Instance *instance = bagT_instantiate(font, 20);
+    bagT_Instance *instance = bagT_instantiate(font, 25);
     if (!instance) {
         fprintf(stderr, "Failed to instantiate font!\n");
         return -1;
     }
 
     const char *testString = "ÔMĚGÁ Ĺ Ý Ľ";
+    const char *testString2 = "This is my kingdom come, this is my kingdom come.";
+    int testLength = bagT_UTF8Length((const unsigned char*)testString);
 
     printf("strlen: %ld\n", strlen(testString));
-    printf("UTF8len: %d\n", bagT_UTF8Length((const unsigned char*)testString));
+    printf("UTF8len: %d\n", testLength);
+
+
+    bagT_Char *chars = malloc(testLength * sizeof(bagT_Char));
+    int *indices = malloc(testLength * sizeof(int));
+    int offset = 0;
+    for (int i = 0; i < testLength; i++) {
+        int move;
+        indices[i] = bagT_UTF8ToGlyphIndex(instance, (const unsigned char *)testString + offset, &move);
+        offset += move;
+    }
+    bagT_fallbackCompositor(instance, NULL, chars, indices, testLength);
+
+    bagT_Memory *memory = bagT_allocateMemory(instance, chars, testLength, bagT_StaticMemory);
+
 
     int maxUniformBlockSize;
     glGetIntegerv(GL_MAX_UNIFORM_BLOCK_SIZE, &maxUniformBlockSize);
@@ -83,10 +99,7 @@ int bagE_main(int argc, char *argv[])
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-    bagT_setColor(0.1f, 1.0f, 0.1f, 1.0f);
-
     bagT_bindInstance(instance);
-    bagT_useProgram(bagT_SimpleProgram);
 
     time_t t = 0;
     int frames = 0;
@@ -108,13 +121,30 @@ int bagE_main(int argc, char *argv[])
 
         glClear(GL_COLOR_BUFFER_BIT);
 
-        bagT_renderUTF8String(testString, 100, 100, NULL, NULL);
+        bagT_useProgram(bagT_SimpleProgram);
+
+        bagT_setColor(0.1f, 1.0f, 0.1f, 1.0f);
+        bagT_renderUTF8String(testString, 100, 100, 3.0f, 3.0f, NULL, NULL);
+        bagT_setColor(1.0f, 0.4f, 0.4f, 1.0f);
+        bagT_renderUTF8String(testString2, 100, 200, 1.0f, 1.0f, NULL, NULL);
+
+        bagT_useProgram(bagT_MemoryProgram);
+
+        bagT_bindMemory(memory);
+
+        bagT_renderMemory(0, testLength - 5, 100, 300, 1.0f, 1.0f);
+        bagT_renderMemory(0, testLength, 100, 400, 2.0f, 2.0f);
+
+        bagT_useProgram(bagT_NoProgram);
+
+        bagT_unbindMemory();
 
         bagE_swapBuffers();
     }
 
     bagT_useProgram(bagT_NoProgram);
 
+    bagT_freeMemory(memory);
     bagT_destroyInstance(instance);
     bagT_destroyFont(font);
     bagT_destroy();
