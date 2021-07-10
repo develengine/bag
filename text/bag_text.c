@@ -3,63 +3,6 @@
 //        error when converting illegal UTF8
 //        add opengl object freeing to error exits
 
-/* TODO
- * [X] int bagT_init(int screenWidth, int screenHeight);
- * [X] void bagT_updateResolution(int screenWidth, int screenHeight);
- * [X] void bagT_useProgram(bagT_Program program);
- * [X] void bagT_setColor(float r, float g, float b, float a);
- * [X] void bagT_destroy();
- *
- * [X] bagT_Font *bagT_initFont(const char *path, int index);
- * [X] bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize);
- * [X] void bagT_bindInstance(bagT_Instance *instance);
- * [X] void bagT_unbindInstance();
- * [X] void bagT_destroyFont(bagT_Font *font);
- * [X] void bagT_destroyInstance(bagT_Instance *font);
- *
- * [X] bagT_Memory *bagT_allocateMemory(
- *             bagT_Instance *instance,
- *             bagT_Char *data,
- *             int count,
- *             bagT_MemoryType type
- *     );
- *
- * [X] void bagT_openMemory(bagT_Memory *memory);
- * [X] void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
- * [X] void bagT_closeMemory();
- * [X] void bagT_bindMemory(bagT_Memory *memory);
- * [X] void bagT_unbindMemory();
- * [X] void bagT_freeMemory(bagT_Memory *memory);
- *
- * [X] int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint);
- * [X] int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
- * [X] void bagT_getOffset(bagT_Instance *instance, int glyphIndex, int *x, int *y);
- * [X] int bagT_getAdvance(bagT_Instance *instance, int glyphIndex);
- * [X] float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2);
- * [X] bagT_VMetrics bagT_getVMetrics(bagT_Instance *instance);
- *
- * [X] int bagT_UTF8Length(const unsigned char *string);
- *
- * [X] void bagT_renderUTF8String(
- *             const char *string,
- *             int x, int y,
- *             bagT_Compositor compositor,
- *             void *compositorData
- *     );
- *
- * [X] void bagT_renderCodepoints(
- *             int *codepoints,
- *             int count,
- *             int x, int y,
- *             bagT_Compositor compositor,
- *             void *compositorData
- *     );
- *
- * [X] void bagT_renderChars(bagT_Char *chars, int count, int x, int y);
- *
- * [X] int bagT_renderMemory(int index, int count, int x, int y, float w, float y);
- */
-
 #include "bag_text.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
