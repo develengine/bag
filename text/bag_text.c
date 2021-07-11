@@ -307,18 +307,15 @@ void bagT_useProgram(bagT_Program program)
     switch (program)
     {
         case bagT_NoProgram:
-            // glDisableVertexAttribArray(0);
             glUseProgram(0);
             break;
 
         case bagT_SimpleProgram:
-            // glDisableVertexAttribArray(0);
             glUseProgram(bagT.simple.shaderProgram);
             break;
 
         case bagT_MemoryProgram:
             glUseProgram(bagT.memory.shaderProgram);
-            // glEnableVertexAttribArray(0);
             break;
     }
 }
@@ -415,7 +412,8 @@ bagT_Font *bagT_initFont(const char *path, int index)
     return font;
 
 error_exit:
-    free(font->fontData);
+    if (font)
+        free(font->fontData);
     free(font);
     return NULL;
 }
@@ -669,7 +667,7 @@ void bagT_openMemory(bagT_Memory *memory)
 }
 
 
-void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length)
+void bagT_fillMemory(bagT_Char *chars, int offset, int length)
 {
     glBufferSubData(GL_ARRAY_BUFFER, offset * sizeof(bagT_Char), length * sizeof(bagT_Char), chars);
 }
@@ -823,7 +821,7 @@ void bagT_fallbackCompositor(
     for (int i = 0; i < length; i++) {
         int glyphIndex = glyphIndices[i];
 
-        chars[i].x = xPos;
+        chars[i].x = (int)xPos;
         chars[i].y = vMetrics.ascent;
         chars[i].color = bagT.color;
         chars[i].glyphIndex = glyphIndex;
@@ -831,7 +829,7 @@ void bagT_fallbackCompositor(
         float advance = bagT_getAdvance(instance, glyphIndex);
         xPos += advance;
 
-        if (i < length - 1) {
+        if (i > 0) {
             xPos += bagT_getKerning(instance, glyphIndex, glyphIndices[i + 1]);
         }
     }

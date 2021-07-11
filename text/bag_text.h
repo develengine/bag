@@ -71,7 +71,7 @@ bagT_Memory *bagT_allocateMemory(
 );
 
 void bagT_openMemory(bagT_Memory *memory);
-void bagT_fillMemory(bagT_Memory *memory, bagT_Char *chars, int offset, int length);
+void bagT_fillMemory(bagT_Char *chars, int offset, int length);
 void bagT_closeMemory();
 void bagT_bindMemory(bagT_Memory *memory);
 void bagT_unbindMemory();

@@ -1,3 +1,3 @@
 #! /bin/sh
 
-cc -std=c99 -pedantic -Wall -o program bag_text.c x11/bag_x11.c test.c glad/src/gl.c -I. -Iglad/include -lGL -lX11 -lXi -ldl -lm
+cc -std=c99 -pedantic -Wall -o program bag_text.c ../engine/x11/bag_x11.c test.c ../engine/glad/src/gl.c -I./ -I../engine/ -I../engine/glad/include -lGL -lX11 -lXi -ldl -lm
