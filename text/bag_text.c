@@ -8,17 +8,19 @@
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
 
-#include BAGT_GL_PATH
+// #include BAGT_GL_PATH
 
 #include <stdio.h>
 #include <string.h>
 #include <limits.h>
+#include <stdint.h>
 
 #define BAGT_FILE_ERROR()\
     fprintf(stderr, "bag text: Failed file IO!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
 
 #define BAGT_MALLOC_ERROR()\
     fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
+
 
 
 typedef struct
@@ -112,7 +114,7 @@ static void bagT_destroyShader(bagT_Shader *shader)
 
 static char *bagT_readFileToString(const char *path)
 {
-    FILE *file = fopen(path, "r");
+    FILE *file = fopen(path, "rb");
     
     if (!file)
         return NULL;
@@ -688,8 +690,8 @@ void bagT_bindMemory(bagT_Memory *memory)
 
 void bagT_unbindMemory()
 {
-    glBindVertexArray(0);
     glDisableVertexAttribArray(0);
+    glBindVertexArray(0);
 }
 
 

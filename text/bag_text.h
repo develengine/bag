@@ -4,8 +4,8 @@
 /* config */
 
 #define BAGT_MAX_RENDER_STRING_LENGTH 512  // change in simple shader as well
-#define BAGT_GL_PATH <glad/gl.h>
-
+// #define BAGT_GL_PATH <glad/gl.h>
+#include <glad/gl.h>
 /* specification */
 
 typedef enum

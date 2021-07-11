@@ -161,12 +161,15 @@ int bagE_main(int argc, char *argv[])
 
         glClear(GL_COLOR_BUFFER_BIT);
 
+
         bagT_useProgram(bagT_SimpleProgram);
 
         bagT_bindInstance(instance);
 
         bagT_setColor(0.1f, 1.0f, 0.1f, 1.0f);
         bagT_renderUTF8String(testString, 100, 100, 3.0f, 3.0f, NULL, NULL);
+
+
         bagT_setColor(1.0f, 0.4f, 0.4f, 1.0f);
         bagT_renderUTF8String(testString2, 100, 200, 1.0f, 1.0f, NULL, NULL);
 
@@ -192,6 +195,7 @@ int bagE_main(int argc, char *argv[])
 
         bagT_useProgram(bagT_NoProgram);
 
+        
         bagE_swapBuffers();
 
         ++counter;
