@@ -88,7 +88,7 @@ typedef struct
 } bagT_Shader;
 
 
-struct BagT
+static struct BagT
 {
     bagT_Shader simple;
     bagT_Shader memory;

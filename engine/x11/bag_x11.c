@@ -27,7 +27,7 @@ typedef void (*GLXSWAPINTERVALEXTPROC)(Display*, GLXDrawable, int);
 GLXSWAPINTERVALEXTPROC glXSwapIntervalEXT = 0;
 
 
-struct bagX11_Program
+static struct bagX11_Program
 {
     Display *display;
     Window root;

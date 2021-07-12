@@ -77,8 +77,9 @@ static char *readFileToString(const char *path)
 }
 
 
-const char *bagC_font = "JetBrainsMono/regular-stripped.ttf";
-const char *bagC_text = "Sub zero pouches liquefying, V eat jam KEKW xd.";
+const char *bagC_font = "riglia/font.ttf";
+// const char *bagC_text = "Sub zero pouches liquefying, V eat jam KEKW xd.";
+const char *bagC_text = "Omega L Y L";
 #define FONT_SIZE 20
 
 static struct
