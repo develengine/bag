@@ -95,6 +95,8 @@ static struct bagWIN32_Program
     int prevX, prevY;
     WINDOWPLACEMENT previousWP;
     int highSurrogate;
+    HANDLE stdoutHandle;
+    DWORD outModeOld;
 } bagWIN32;
 
 typedef struct bagWIN32_Program bagWIN32_Program;
@@ -166,6 +168,28 @@ LRESULT CALLBACK bagWIN32_windowProc(
 #ifdef BAGE_WINDOWS_CONSOLE
 int main(int argc, char *argv[]) {
     bagWIN32.instance = GetModuleHandle(NULL);
+    
+    DWORD outMode = 0;
+    bagWIN32.stdoutHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    
+    if (bagWIN32.stdoutHandle == INVALID_HANDLE_VALUE) {
+        bagWIN32_error("Failed to retrieve stdout handle!");
+        exit(-1);
+    }
+    
+    if (!GetConsoleMode(bagWIN32.stdoutHandle, &outMode)) {
+        bagWIN32_error("Failed to retrieve console mode!");
+        exit(-1);
+    }
+    
+    bagWIN32.outModeOld = outMode;
+    outMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+    
+    if (!SetConsoleMode(bagWIN32.stdoutHandle, outMode)) {
+        bagWIN32_error("Failed to set console mode!");
+        exit(-1);
+    }
+    
 #else
 int WinMain(
         HINSTANCE hinstance,
@@ -339,6 +363,11 @@ int WinMain(
     ReleaseDC(bagWIN32.window, bagWIN32.deviceContext);
     wglDeleteContext(bagWIN32.context);
 
+    if (!SetConsoleMode(bagWIN32.stdoutHandle, bagWIN32.outModeOld)) {
+        bagWIN32_error("Failed to restore console mode!");
+        exit(-1);
+    }
+    
     return programReturn;
 }
 
