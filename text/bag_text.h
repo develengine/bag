@@ -47,13 +47,17 @@ typedef struct
     float lineGap;
 } bagT_VMetrics;
 
+typedef struct
+{
+    float r, g, b, a;
+} bagT_Color;
+
 typedef void (*bagT_Compositor) (bagT_Instance *, void*, bagT_Char *, int*, int);
 
 
 int bagT_init(int screenWidth, int screenHeight);
 void bagT_updateResolution(int screenWidth, int screenHeight);
 void bagT_useProgram(bagT_Program program);
-void bagT_setColor(float r, float g, float b, float a);
 void bagT_destroy();
 
 bagT_Font *bagT_initFont(const char *path, int index);
@@ -107,6 +111,6 @@ void bagT_renderChars(bagT_Char *chars, int count, int x, int y, float w, float 
 
 void bagT_renderMemory(int index, int count, int x, int y, float w, float h);
 
-void bagT_fallbackCompositor(bagT_Instance *instance, void *data, bagT_Char *chars, int *glyphIndices, int length);
+void bagT_simpleCompositor(bagT_Instance *instance, void *data, bagT_Char *chars, int *glyphIndices, int length);
 
 #endif

@@ -93,8 +93,6 @@ static struct BagT
     bagT_Shader simple;
     bagT_Shader memory;
 
-    int color;
-
     bagT_Instance *boundInstance;
 
     struct {
@@ -236,8 +234,6 @@ error_exit:
 
 int bagT_init(int screenWidth, int screenHeight)
 {
-    bagT.color = 0xffffffff;
-
     int result = bagT_loadShader(
             "shaders/simple_vert.glsl",
             "shaders/simple_frag.glsl",
@@ -323,12 +319,12 @@ void bagT_useProgram(bagT_Program program)
 }
 
 
-void bagT_setColor(float r, float g, float b, float a)
+static inline int bagT_packColor(bagT_Color color)
 {
-    bagT.color = ((int)(a * 255) << 24)
-               | ((int)(b * 255) << 16)
-               | ((int)(g * 255) << 8)
-               |  (int)(r * 255);
+    return ((int)(color.a * 255) << 24)
+         | ((int)(color.b * 255) << 16)
+         | ((int)(color.g * 255) << 8)
+         |  (int)(color.r * 255);
 }
 
 
@@ -810,7 +806,7 @@ int bagT_UTF8Length(const unsigned char *string)
 }
 
 
-void bagT_fallbackCompositor(
+void bagT_simpleCompositor(
         bagT_Instance *instance, 
         void *data,
         bagT_Char *chars,
@@ -819,13 +815,18 @@ void bagT_fallbackCompositor(
 ) {
     bagT_VMetrics vMetrics = bagT_getVMetrics(instance);
     float xPos = 0;
+    int color = 0xffffffff;
+
+    if (data) {
+        color = bagT_packColor(*((bagT_Color*)data));
+    }
 
     for (int i = 0; i < length; i++) {
         int glyphIndex = glyphIndices[i];
 
         chars[i].x = (int)xPos;
         chars[i].y = vMetrics.ascent;
-        chars[i].color = bagT.color;
+        chars[i].color = color;
         chars[i].glyphIndex = glyphIndex;
 
         float advance = bagT_getAdvance(instance, glyphIndex);
@@ -858,7 +859,7 @@ void bagT_renderUTF8String(
     }
 
     if (!compositor) {
-        compositor = &bagT_fallbackCompositor;
+        compositor = &bagT_simpleCompositor;
     }
 
     compositor(
@@ -889,7 +890,7 @@ void bagT_renderCodepoints(
     }
 
     if (!compositor) {
-        compositor = &bagT_fallbackCompositor;
+        compositor = &bagT_simpleCompositor;
     }
 
     compositor(

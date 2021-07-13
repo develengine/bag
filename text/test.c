@@ -95,7 +95,7 @@ int bagE_main(int argc, char *argv[])
         indices[i] = bagT_UTF8ToGlyphIndex(instance3, (const unsigned char *)testString3 + offset, &move);
         offset += move;
     }
-    bagT_fallbackCompositor(instance3, NULL, chars, indices, testLength3);
+    bagT_simpleCompositor(instance3, NULL, chars, indices, testLength3);
 
 
     bagT_Memory *memory = bagT_allocateMemory(instance3, chars, testLength3, bagT_StaticMemory);
@@ -144,6 +144,10 @@ int bagE_main(int argc, char *argv[])
 
     int counter = 0;
 
+    bagT_Color red = { 1.0f, 0.0f, 0.0f, 1.0f };
+    bagT_Color green = { 0.0f, 1.0f, 0.0f, 1.0f };
+    bagT_Color blue = { 0.2f, 0.4f, 1.0f, 1.0f };
+
     while (running) {
         bagE_pollEvents();
 
@@ -166,21 +170,18 @@ int bagE_main(int argc, char *argv[])
 
         bagT_bindInstance(instance);
 
-        bagT_setColor(0.1f, 1.0f, 0.1f, 1.0f);
-        bagT_renderUTF8String(testString, 100, 100, 3.0f, 3.0f, NULL, NULL);
-
-
-        bagT_setColor(1.0f, 0.4f, 0.4f, 1.0f);
-        bagT_renderUTF8String(testString2, 100, 200, 1.0f, 1.0f, NULL, NULL);
+        bagT_renderUTF8String(testString, 100, 100, 3.0f, 3.0f, NULL, &red);
+        bagT_renderUTF8String(testString2, 100, 200, 1.0f, 1.0f, NULL, &green);
 
         bagT_bindInstance(instance2);
 
-        bagT_renderUTF8String(testString2, 100, 500, 1.0f, 1.0f, NULL, NULL);
+        bagT_renderUTF8String(testString2, 100, 500, 1.0f, 1.0f, NULL, &blue);
 
 
-        bagT_bindInstance(instance3);
 
         bagT_useProgram(bagT_MemoryProgram);
+
+        bagT_bindInstance(instance3);
 
         bagT_bindMemory(memory);
 
