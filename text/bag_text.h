@@ -4,7 +4,7 @@
 /* config */
 
 #define BAGT_MAX_RENDER_STRING_LENGTH 512  // change in simple shader as well
-// #define BAGT_GL_PATH <glad/gl.h>
+
 #include <glad/gl.h>
 /* specification */
 
@@ -52,7 +52,15 @@ typedef struct
     float r, g, b, a;
 } bagT_Color;
 
-typedef void (*bagT_Compositor) (bagT_Instance *, void*, bagT_Char *, int*, int);
+typedef struct
+{
+    int x, y;
+    float w, h;
+    float r;
+} bagT_Transform;
+
+
+typedef void (*bagT_Compositor) (bagT_Instance*, void*, bagT_Char*, int*, int);
 
 
 int bagT_init(int screenWidth, int screenHeight);
@@ -82,18 +90,17 @@ void bagT_unbindMemory();
 void bagT_freeMemory(bagT_Memory *memory);
 
 int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint);
-int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset);
+int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const char *ch, int *offset);
 void bagT_getOffset(bagT_Instance *instance, int glyphIndex, int *x, int *y);
 float bagT_getAdvance(bagT_Instance *instance, int glyphIndex);
 float bagT_getKerning(bagT_Instance *instance, int glyphIndex1, int glyphIndex2);
 bagT_VMetrics bagT_getVMetrics(bagT_Instance *instance);
 
-int bagT_UTF8Length(const unsigned char *string);
+int bagT_UTF8Length(const char *string);
 
 void bagT_renderUTF8String(
         const char *string,
-        int x, int y,
-        float w, float h,
+        bagT_Transform transform,
         bagT_Compositor compositor,
         void *compositorData
 );
@@ -101,15 +108,14 @@ void bagT_renderUTF8String(
 void bagT_renderCodepoints(
         int *codepoints,
         int count,
-        int x, int y,
-        float w, float h,
+        bagT_Transform transform,
         bagT_Compositor compositor,
         void *compositorData
 );
 
-void bagT_renderChars(bagT_Char *chars, int count, int x, int y, float w, float h);
+void bagT_renderChars(bagT_Char *chars, int count, bagT_Transform transform);
 
-void bagT_renderMemory(int index, int count, int x, int y, float w, float h);
+void bagT_renderMemory(int index, int count, bagT_Transform transform);
 
 void bagT_simpleCompositor(bagT_Instance *instance, void *data, bagT_Char *chars, int *glyphIndices, int length);
 

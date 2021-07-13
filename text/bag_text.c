@@ -1,14 +1,14 @@
-// FIXME: error handling when no instance bound
-//        truncate when maximum simple string size exceeded
-//        error when converting illegal UTF8
-//        add opengl object freeing to error exits
+/* FIXME
+ */
+
+/* TODO
+ * [ ] support custom allocators
+ */
 
 #include "bag_text.h"
 
 #define STB_TRUETYPE_IMPLEMENTATION
 #include "stb_truetype.h"
-
-// #include BAGT_GL_PATH
 
 #include <stdio.h>
 #include <string.h>
@@ -22,7 +22,6 @@
     fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
 
 
-
 typedef struct
 {
     int x, y;
@@ -32,10 +31,6 @@ typedef struct
 } Rectangle;
 
 #include "rect_tile.c"  // TODO make part of this file
-
-/* TODO
- * [ ] support custom allocators
- */
 
 
 typedef struct  // TODO pack into 16 bytes
@@ -76,8 +71,6 @@ typedef struct
     unsigned int vertexShader;
     unsigned int fragmentShader;
     unsigned int shaderProgram;
-
-    int inUse;
 
     struct {
         int screenRes;
@@ -234,6 +227,8 @@ error_exit:
 
 int bagT_init(int screenWidth, int screenHeight)
 {
+    bagT.boundInstance = NULL;
+
     int result = bagT_loadShader(
             "shaders/simple_vert.glsl",
             "shaders/simple_frag.glsl",
@@ -255,8 +250,6 @@ int bagT_init(int screenWidth, int screenHeight)
     bagT.simple.uni.scale     = glGetUniformLocation(bagT.simple.shaderProgram, "u_scale");
     BAGT_UNIFORM_CHECK(bagT.simple.uni.scale, "u_scale");
 
-    bagT.simple.inUse = 0;
-
     result = bagT_loadShader(
             "shaders/memory_vert.glsl",
             "shaders/memory_frag.glsl",
@@ -276,8 +269,6 @@ int bagT_init(int screenWidth, int screenHeight)
     BAGT_UNIFORM_CHECK(bagT.memory.uni.position, "u_position");
     bagT.memory.uni.scale     = glGetUniformLocation(bagT.memory.shaderProgram, "u_scale");
     BAGT_UNIFORM_CHECK(bagT.memory.uni.scale, "u_scale");
-
-    bagT.memory.inUse = 0;
 
     bagT_updateResolution(screenWidth, screenHeight);
 
@@ -363,7 +354,7 @@ bagT_Font *bagT_initFont(const char *path, int index)
 
     FILE *fontFile = fopen(path, "rb");
     if (!fontFile) {
-        fprintf(stderr, "bag font: Failed to load font file!\n");
+        fprintf(stderr, "bag text: Failed to load font file!\n");
         goto error_exit;
     }
 
@@ -391,8 +382,9 @@ bagT_Font *bagT_initFont(const char *path, int index)
         goto error_exit;
     }
 
-    if (fclose(fontFile))
+    if (fclose(fontFile)) {
         BAGT_FILE_ERROR();
+    }
 
 
     /* initialize stb_truetype */
@@ -410,8 +402,9 @@ bagT_Font *bagT_initFont(const char *path, int index)
     return font;
 
 error_exit:
-    if (font)
+    if (font) {
         free(font->fontData);
+    }
     free(font);
     return NULL;
 }
@@ -705,7 +698,7 @@ int bagT_codepointToGlyphIndex(bagT_Instance *instance, int codepoint)
 }
 
 
-static unsigned int bagT_UTF8ToUTF32(const unsigned char *s, int *offset)
+static unsigned int bagT_UTF8ToUTF32(const char *s, int *offset)
 {
     if ((s[0] & 0x80) == 0) {
         *offset = 1;
@@ -738,7 +731,7 @@ static unsigned int bagT_UTF8ToUTF32(const unsigned char *s, int *offset)
 }
 
 
-static unsigned int bagT_UTF8Width(const unsigned char *s)
+static unsigned int bagT_UTF8Width(const char *s)
 {
     if ((s[0] & 0x80) == 0)
         return 1;
@@ -756,9 +749,15 @@ static unsigned int bagT_UTF8Width(const unsigned char *s)
 }
 
 
-int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const unsigned char *ch, int *offset)
+int bagT_UTF8ToGlyphIndex(bagT_Instance *instance, const char *ch, int *offset)
 {
-    return stbtt_FindGlyphIndex(&(instance->font->fontInfo), bagT_UTF8ToUTF32(ch, offset));
+    int codepoint = bagT_UTF8ToUTF32(ch, offset);
+    if (!(*offset)) {
+        fprintf(stderr, "bag text: Illegal UTF8 byte '%d'!\n", ch[0]);
+        *offset = 1;
+    }
+
+    return stbtt_FindGlyphIndex(&(instance->font->fontInfo), codepoint);
 }
 
 
@@ -798,7 +797,7 @@ bagT_VMetrics bagT_getVMetrics(bagT_Instance *instance)
 }
 
 
-int bagT_UTF8Length(const unsigned char *string)
+int bagT_UTF8Length(const char *string)
 {
     int offset = 0, length = 0;
     for (; string[offset]; offset += bagT_UTF8Width(string + offset), length++);
@@ -841,18 +840,26 @@ void bagT_simpleCompositor(
 
 void bagT_renderUTF8String(
         const char *string,
-        int x, int y,
-        float w, float h,
+        bagT_Transform transform,
         bagT_Compositor compositor,
         void *compositorData
 ) {
-    int length = bagT_UTF8Length((const unsigned char*)string);
+    if (!bagT.boundInstance) {
+        fprintf(stderr, "bag text: Rendering without binding an instance!\n");
+        return;
+    }
+
+    int length = bagT_UTF8Length(string);
+
+    if (length > BAGT_MAX_RENDER_STRING_LENGTH) {
+        length = BAGT_MAX_RENDER_STRING_LENGTH;
+    }
 
     int move;
     for (int i = 0; i < length; i++) {
         bagT.scratch.glyphIndexBuffer[i] = bagT_UTF8ToGlyphIndex(
                 bagT.boundInstance,
-                (const unsigned char*)string,
+                string,
                 &move
         );
         string += move;
@@ -870,18 +877,26 @@ void bagT_renderUTF8String(
             length
     );
 
-    bagT_renderChars(bagT.scratch.charBuffer, length, x, y, w, h);
+    bagT_renderChars(bagT.scratch.charBuffer, length, transform);
 }
 
 
 void bagT_renderCodepoints(
         int *codepoints,
         int count,
-        int x, int y,
-        float w, float h,
+        bagT_Transform transform,
         bagT_Compositor compositor,
         void *compositorData
 ) {
+    if (!bagT.boundInstance) {
+        fprintf(stderr, "bag text: Rendering without binding an instance!\n");
+        return;
+    }
+
+    if (count > BAGT_MAX_RENDER_STRING_LENGTH) {
+        count = BAGT_MAX_RENDER_STRING_LENGTH;
+    }
+
     for (int i = 0; i < count; i++) {
         bagT.scratch.glyphIndexBuffer[i] = bagT_codepointToGlyphIndex(
                 bagT.boundInstance,
@@ -901,24 +916,29 @@ void bagT_renderCodepoints(
             count
     );
 
-    bagT_renderChars(bagT.scratch.charBuffer, count, x, y, w, h);
+    bagT_renderChars(bagT.scratch.charBuffer, count, transform);
 }
 
 
-void bagT_renderChars(bagT_Char *chars, int count, int x, int y, float w, float h)
+void bagT_renderChars(bagT_Char *chars, int count, bagT_Transform transform)
 {
+    if (!bagT.boundInstance) {
+        fprintf(stderr, "bag text: Rendering without binding an instance!\n");
+        return;
+    }
+
     glBindVertexArray(bagT.boundInstance->vao);
-    glProgramUniform2i(bagT.simple.shaderProgram, bagT.simple.uni.position, x, y);
-    glProgramUniform2f(bagT.simple.shaderProgram, bagT.simple.uni.scale, w, h);
+    glProgramUniform2i(bagT.simple.shaderProgram, bagT.simple.uni.position, transform.x, transform.y);
+    glProgramUniform2f(bagT.simple.shaderProgram, bagT.simple.uni.scale, transform.w, transform.h);
     glProgramUniform4iv(bagT.simple.shaderProgram, bagT.simple.uni.chars, count, (int*)chars);
     glDrawArraysInstanced(GL_TRIANGLES, 0, 6, count);
     glBindVertexArray(0);
 }
 
 
-void bagT_renderMemory(int index, int count, int x, int y, float w, float h)
+void bagT_renderMemory(int index, int count, bagT_Transform transform)
 {
-    glProgramUniform2i(bagT.memory.shaderProgram, bagT.memory.uni.position, x, y);
-    glProgramUniform2f(bagT.memory.shaderProgram, bagT.memory.uni.scale, w, h);
+    glProgramUniform2i(bagT.memory.shaderProgram, bagT.memory.uni.position, transform.x, transform.y);
+    glProgramUniform2f(bagT.memory.shaderProgram, bagT.memory.uni.scale, transform.w, transform.h);
     glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 6, count, index);
 }

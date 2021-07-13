@@ -9,8 +9,6 @@
 #include "bag_text.h"
 
 static int running = 1;
-static int altDown = 0;
-static int shiftDown = 0;
 
 
 void GLAPIENTRY openglCallback(
@@ -44,9 +42,9 @@ int bagE_main(int argc, char *argv[])
 
     const char *testString = "ÔMĚGÁ Ĺ Ý Ľ";
     const char *testString2 = "This is my kingdom come, this is my kingdom come.";
-    int testLength = bagT_UTF8Length((const unsigned char*)testString);
+    int testLength = bagT_UTF8Length(testString);
     const char *testString3 = "Omega L Y L";
-    int testLength3 = bagT_UTF8Length((const unsigned char*)testString3);
+    int testLength3 = bagT_UTF8Length(testString3);
 
 
     if (bagT_init(winWidth, winHeight)){
@@ -92,7 +90,7 @@ int bagE_main(int argc, char *argv[])
     int offset = 0;
     for (int i = 0; i < testLength; i++) {
         int move;
-        indices[i] = bagT_UTF8ToGlyphIndex(instance3, (const unsigned char *)testString3 + offset, &move);
+        indices[i] = bagT_UTF8ToGlyphIndex(instance3, testString3 + offset, &move);
         offset += move;
     }
     bagT_simpleCompositor(instance3, NULL, chars, indices, testLength3);
@@ -148,6 +146,9 @@ int bagE_main(int argc, char *argv[])
     bagT_Color green = { 0.0f, 1.0f, 0.0f, 1.0f };
     bagT_Color blue = { 0.2f, 0.4f, 1.0f, 1.0f };
 
+    bagT_Transform transform;
+    transform.x = 100;
+
     while (running) {
         bagE_pollEvents();
 
@@ -170,13 +171,20 @@ int bagE_main(int argc, char *argv[])
 
         bagT_bindInstance(instance);
 
-        bagT_renderUTF8String(testString, 100, 100, 3.0f, 3.0f, NULL, &red);
-        bagT_renderUTF8String(testString2, 100, 200, 1.0f, 1.0f, NULL, &green);
+        transform.y = 100;
+        transform.w = 3.0f;
+        transform.h = 3.0f;
+        bagT_renderUTF8String(testString, transform, NULL, &red);
+
+        transform.y = 200;
+        transform.w = 1.0f;
+        transform.h = 1.0f;
+        bagT_renderUTF8String(testString2, transform, NULL, &green);
 
         bagT_bindInstance(instance2);
 
-        bagT_renderUTF8String(testString2, 100, 500, 1.0f, 1.0f, NULL, &blue);
-
+        transform.y = 500;
+        bagT_renderUTF8String(testString2, transform, NULL, &blue);
 
 
         bagT_useProgram(bagT_MemoryProgram);
@@ -185,12 +193,20 @@ int bagE_main(int argc, char *argv[])
 
         bagT_bindMemory(memory);
 
-        bagT_renderMemory(0, (counter / 8) % (testLength + 1), 100, 300, 1.0f, 1.0f);
-        bagT_renderMemory((counter / 8) % testLength, 1, 100, 400, 2.0f, 2.0f);
+        transform.y = 300;
+        bagT_renderMemory(0, (counter / 8) % (testLength + 1), transform);
+
+        transform.y = 400;
+        transform.w = 2.0f;
+        transform.h = 2.0f;
+        bagT_renderMemory((counter / 8) % testLength, 1, transform);
 
         bagT_bindMemory(memory2);
 
-        bagT_renderMemory(0, testLength3 * 2, 100, 600, 1.0f, 1.0f);
+        transform.y = 600;
+        transform.w = 1.0f;
+        transform.h = 1.0f;
+        bagT_renderMemory(0, testLength3 * 2, transform);
 
         bagT_unbindMemory();
 
