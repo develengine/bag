@@ -75,6 +75,9 @@ void bagT_unbindInstance();
 void bagT_destroyFont(bagT_Font *font);
 void bagT_destroyInstance(bagT_Instance *instance);
 
+void bagT_createInstanceFile(bagT_Font *font, float fontSize, const char *fileName);
+bagT_Instance *bagT_loadInstanceFile(bagT_Font *font, const char *fileName);
+
 bagT_Memory *bagT_allocateMemory(
         bagT_Instance *instance,
         bagT_Char *data,

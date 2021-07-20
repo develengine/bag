@@ -30,7 +30,35 @@ typedef struct
     int index;
 } Rectangle;
 
-#include "rect_tile.c"  // TODO make part of this file
+#include "rect_tile.c"  // TODO merge into one file
+#include "rect_pack.c"
+
+static int packEmUp(Rectangle *rectangles, int count)
+{
+    Rect *rects = malloc(count * sizeof(Rect));
+    if (!rects) {
+        BAGT_MALLOC_ERROR();
+        return 1;
+    }
+
+    for (int i = 0; i < count; i++) {
+        rects[i].w = rectangles[i].w;
+        rects[i].h = rectangles[i].h;
+        rects[i].id = rectangles[i].index;
+    }
+
+    packRects(rects, count);
+
+    for (int i = 0; i < count; i++) {
+        rectangles[i].x = rects[i].x;
+        rectangles[i].y = rects[i].y;
+        rectangles[i].w = rects[i].w;
+        rectangles[i].h = rects[i].h;
+        rectangles[i].index = rects[i].id;
+    }
+
+    return 0;
+}
 
 
 typedef struct  // TODO pack into 16 bytes
@@ -38,6 +66,18 @@ typedef struct  // TODO pack into 16 bytes
     int x, y, w, h;
     int xOff, yOff;
 } Glyph;
+
+typedef struct
+{
+    bagT_Font *font;
+    float fontScale;
+
+    int glyphCount;
+    Glyph *glyphBuffer;
+
+    unsigned char *atlasBuffer;
+    Size atlasSpan;
+} bagT_InstanceData;
 
 
 struct bagT_Font
@@ -410,22 +450,14 @@ error_exit:
 }
 
 
-bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
+static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, float fontSize)
 {
     unsigned char **bitmaps = NULL;
     Rectangle *rects = NULL;
     Glyph *glyphs = NULL;
     unsigned char *atlasBuffer = NULL;
 
-    bagT_Instance *instance = malloc(sizeof(bagT_Instance));
-    if (!instance) {
-        BAGT_MALLOC_ERROR();
-        goto error_exit;
-    }
-
-    instance->font = font;
-    instance->fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
-
+    float fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
     
     /* build atlas and glyphs array */
 
@@ -454,7 +486,7 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
         unsigned char *bitmap = stbtt_GetGlyphBitmap(
                 &font->fontInfo,
                 0,
-                instance->fontScale,
+                fontScale,
                 i,
                 &width, &height,
                 &xOff, &yOff
@@ -475,9 +507,20 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
         glyphs[i].yOff = yOff;
     }
 
-    packRects(rects, glyphCount);
+    // packRectangles(rects, glyphCount);
+    packEmUp(rects, glyphCount);
 
-    Span atlasSpan = getSpan(rects, glyphCount);
+    static int cringe = 0;
+    if (!cringe) {
+        FILE *leFile = fopen("rectangles", "w");
+        for (int i = 0; i < glyphCount; i++) {
+            fprintf(leFile, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+        }
+        fclose(leFile);
+        cringe = 1;
+    }
+
+    Size atlasSpan = getSize(rects, glyphCount);
     atlasSpan.w = ceil(atlasSpan.w / 4.f) * 4;  // necessary for alignment
 
     atlasBuffer = malloc(atlasSpan.w * atlasSpan.h);
@@ -509,6 +552,34 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
     free(rects);
     rects = NULL;
 
+    data->font = font;
+    data->fontScale = fontScale;
+    data->glyphCount = glyphCount;
+    data->glyphBuffer = glyphs;
+    data->atlasBuffer = atlasBuffer;
+    data->atlasSpan = atlasSpan;
+
+    return 0;
+
+error_exit:
+    free(glyphs);
+    free(rects);
+    free(bitmaps);
+    free(atlasBuffer);
+    return 1;
+}
+
+
+static bagT_Instance *bagT_makeInstance(bagT_InstanceData data)
+{
+    bagT_Instance *instance = malloc(sizeof(bagT_Instance));
+    if (!instance) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+
+    instance->font = data.font;
+    instance->fontScale = data.fontScale;
 
     /* load atlas and glyphs array to opengl */
 
@@ -524,17 +595,17 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
             GL_TEXTURE_2D,
             0,
             GL_RED,
-            atlasSpan.w,
-            atlasSpan.h,
+            data.atlasSpan.w,
+            data.atlasSpan.h,
             0,
             GL_RED,
             GL_UNSIGNED_BYTE,
-            atlasBuffer
+            data.atlasBuffer
     );
     glBindTexture(GL_TEXTURE_2D, 0);
 
-    free(atlasBuffer);
-    atlasBuffer = NULL;
+    free(data.atlasBuffer);
+    data.atlasBuffer = NULL;
 
     glGenVertexArrays(1, &instance->vao);
     glBindVertexArray(instance->vao);
@@ -543,25 +614,35 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, instance->glyphs);
     glBufferData(
             GL_SHADER_STORAGE_BUFFER,
-            glyphCount * sizeof(Glyph),
-            glyphs,
+            data.glyphCount * sizeof(Glyph),
+            data.glyphBuffer,
             GL_STATIC_DRAW
     );
 
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, 0);
     glBindVertexArray(0);
 
-    instance->glyphBuffer = glyphs;
+    instance->glyphBuffer = data.glyphBuffer;
 
     return instance;
 
 error_exit:
-    free(glyphs);
-    free(rects);
-    free(bitmaps);
-    free(atlasBuffer);
+    free(data.atlasBuffer);
+    free(data.glyphBuffer);
     free(instance);
     return NULL;
+}
+
+
+bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
+{
+    bagT_InstanceData data;
+
+    if (bagT_createInstanceData(&data, font, fontSize)) {
+        return NULL;
+    }
+
+    return bagT_makeInstance(data);
 }
 
 
