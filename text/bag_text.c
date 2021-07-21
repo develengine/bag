@@ -22,6 +22,9 @@
     fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__)
 
 
+#define BAGT_MAGIC_NUMBER 0x23456341
+
+
 typedef struct
 {
     int x, y;
@@ -30,8 +33,9 @@ typedef struct
     int index;
 } Rectangle;
 
-#include "rect_tile.c"  // TODO merge into one file
+
 #include "rect_pack.c"
+
 
 static int packEmUp(Rectangle *rectangles, int count)
 {
@@ -141,6 +145,7 @@ static void bagT_destroyShader(bagT_Shader *shader)
     glDeleteShader(shader->fragmentShader);
     glDeleteProgram(shader->shaderProgram);
 }
+
 
 
 static char *bagT_readFileToString(const char *path)
@@ -450,7 +455,7 @@ error_exit:
 }
 
 
-static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, float fontSize)
+static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, float fontSize, int fastPack)
 {
     unsigned char **bitmaps = NULL;
     Rectangle *rects = NULL;
@@ -507,17 +512,11 @@ static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, flo
         glyphs[i].yOff = yOff;
     }
 
-    // packRectangles(rects, glyphCount);
-    packEmUp(rects, glyphCount);
 
-    static int cringe = 0;
-    if (!cringe) {
-        FILE *leFile = fopen("rectangles", "w");
-        for (int i = 0; i < glyphCount; i++) {
-            fprintf(leFile, "%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
-        }
-        fclose(leFile);
-        cringe = 1;
+    if (fastPack) {
+        packEmUp(rects, glyphCount);
+    } else {
+        packRectangles(rects, glyphCount);
     }
 
     Size atlasSpan = getSize(rects, glyphCount);
@@ -638,11 +637,115 @@ bagT_Instance *bagT_instantiate(bagT_Font *font, float fontSize)
 {
     bagT_InstanceData data;
 
-    if (bagT_createInstanceData(&data, font, fontSize)) {
+    if (bagT_createInstanceData(&data, font, fontSize, 1)) {
         return NULL;
     }
 
     return bagT_makeInstance(data);
+}
+
+
+#define BAGT_WRITE(ptr, size, count, file)                                                      \
+    if (fwrite(ptr, size, count, file) != count) {                                              \
+        fprintf(stderr, "bag text: failed to write!\nFile: %s, Line: %d\n", __FILE__, __LINE__);\
+        goto error_exit;                                                                        \
+    }
+
+int bagT_createInstanceFile(bagT_Font *font, float fontSize, const char *fileName)
+{
+    bagT_InstanceData data = { 0 };
+
+    if (bagT_createInstanceData(&data, font, fontSize, 0)) {
+        goto error_exit;
+    }
+
+    FILE *file = fopen(fileName, "wb");
+    if (!file) {
+        BAGT_FILE_ERROR();
+        goto error_exit;
+    }
+
+    uint32_t magic = BAGT_MAGIC_NUMBER;
+    uint32_t atlasSize = data.atlasSpan.w * data.atlasSpan.h;
+
+    BAGT_WRITE(&magic, sizeof(uint32_t), 1, file);
+    BAGT_WRITE(&(data.fontScale), sizeof(float), 1, file);
+    BAGT_WRITE(&(data.glyphCount), sizeof(int), 1, file);
+    BAGT_WRITE(&(data.atlasSpan.w), sizeof(int), 1, file);
+    BAGT_WRITE(&(data.atlasSpan.h), sizeof(int), 1, file);
+    BAGT_WRITE(data.glyphBuffer, sizeof(Glyph), data.glyphCount, file);
+    BAGT_WRITE(data.atlasBuffer, sizeof(unsigned char), atlasSize, file);
+
+    fclose(file);
+
+    return 0;
+
+error_exit:
+    free(data.atlasBuffer);
+    free(data.glyphBuffer);
+    if (file) {
+        fclose(file);
+    }
+    return -1;
+}
+
+
+#define BAGT_READ(ptr, size, count, file)                                                       \
+    if (fread(ptr, size, count, file) != count) {                                               \
+        fprintf(stderr, "bag text: failed to read!\nFile: %s, Line: %d\n", __FILE__, __LINE__); \
+        goto error_exit;                                                                        \
+    }
+
+bagT_Instance *bagT_loadInstanceFile(bagT_Font *font, const char *fileName)
+{
+    bagT_InstanceData data = { 0 };
+
+    data.font = font;
+
+    FILE *file = fopen(fileName, "rb");
+    if (!file) {
+        BAGT_FILE_ERROR();
+        goto error_exit;
+    }
+
+    uint32_t magic;
+    BAGT_READ(&magic, sizeof(uint32_t), 1, file);
+    if (magic != BAGT_MAGIC_NUMBER) {
+        fprintf(stderr, "bag text: corrupted instance file! '%s'\n", fileName);
+        goto error_exit;
+    }
+
+    BAGT_READ(&(data.fontScale), sizeof(float), 1, file);
+    BAGT_READ(&(data.glyphCount), sizeof(int), 1, file);
+    BAGT_READ(&(data.atlasSpan.w), sizeof(int), 1, file);
+    BAGT_READ(&(data.atlasSpan.h), sizeof(int), 1, file);
+
+    data.glyphBuffer = malloc(data.glyphCount * sizeof(Glyph));
+    if (!data.glyphCount) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+    BAGT_READ(data.glyphBuffer, sizeof(Glyph), data.glyphCount, file);
+
+    int atlasSize = data.atlasSpan.w * data.atlasSpan.h;
+    data.atlasBuffer = malloc(atlasSize * sizeof(unsigned char));
+    if (!data.atlasBuffer) {
+        BAGT_MALLOC_ERROR();
+        goto error_exit;
+    }
+    BAGT_READ(data.atlasBuffer, sizeof(unsigned char), atlasSize, file);
+
+    fclose(file);
+
+    return bagT_makeInstance(data);
+
+error_exit:
+    free(data.atlasBuffer);
+    free(data.glyphBuffer);
+    if (file) {
+        fclose(file);
+    }
+    return NULL;
 }
 
 

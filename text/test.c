@@ -11,6 +11,16 @@
 static int running = 1;
 
 
+static inline int fileExists(const char *fileName)
+{
+    FILE *file = fopen(fileName, "rb");
+    if (file) {
+        fclose(file);
+    }
+    return file != NULL;
+}
+
+
 void GLAPIENTRY openglCallback(
         GLenum source,
         GLenum type,
@@ -59,15 +69,31 @@ int bagE_main(int argc, char *argv[])
         return -1;
     }
 
-    bagT_Instance *instance = bagT_instantiate(font, 25);
+
+    if (!fileExists("font1")) {
+        if (bagT_createInstanceFile(font, 25, "font1")) {
+            fprintf(stderr, "Failed to create instance file!\n");
+            return -1;
+        }
+    }
+
+    bagT_Instance *instance = bagT_loadInstanceFile(font, "font1");
     if (!instance) {
-        fprintf(stderr, "Failed to instantiate font!\n");
+        fprintf(stderr, "Failed to load font instance!\n");
         return -1;
     }
 
-    bagT_Instance *instance2 = bagT_instantiate(font, 20);
+
+    if (!fileExists("font2")) {
+        if (bagT_createInstanceFile(font, 20, "font2")) {
+            fprintf(stderr, "Failed to create instance file!\n");
+            return -1;
+        }
+    }
+
+    bagT_Instance *instance2 = bagT_loadInstanceFile(font, "font2");
     if (!instance2) {
-        fprintf(stderr, "Failed to instantiate font!\n");
+        fprintf(stderr, "Failed to load font instance!\n");
         return -1;
     }
 
