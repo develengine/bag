@@ -5,15 +5,24 @@
 
 typedef struct
 {
+    int x, y;
     int w, h;
-} Size;
+    int flags;
+    int index;
+} bagT_Rectangle;
 
 
-Size getSize(const Rectangle *rects, int count)
+typedef struct
 {
-    Size output = { 0, 0 };
+    int w, h;
+} bagT_Size;
+
+
+bagT_Size getSize(const bagT_Rectangle *rects, int count)
+{
+    bagT_Size output = { 0, 0 };
     for (int i = 0; i < count; i++) {
-        Rectangle rect = rects[i];
+        bagT_Rectangle rect = rects[i];
         if (rect.x + rect.w > output.w)
             output.w = rect.x + rect.w;
         if (rect.y + rect.h > output.h)
@@ -23,14 +32,14 @@ Size getSize(const Rectangle *rects, int count)
 }
 
 
-#define INTERSECTS(x1, w1, x2, w2) (!((x1 + w1 <= x2) || (x2 + w2 <= x1)))
+#define BAGT_INTERSECTS(x1, w1, x2, w2) (!((x1 + w1 <= x2) || (x2 + w2 <= x1)))
 
-static inline int doesIntersect(Rectangle r1, const Rectangle *rects, int count)
+static inline int bagT_doesIntersect(bagT_Rectangle r1, const bagT_Rectangle *rects, int count)
 {
     for (int i = 0; i < count; i++) {
-        Rectangle r2 = rects[i];
+        bagT_Rectangle r2 = rects[i];
 
-        if (INTERSECTS(r1.x, r1.w, r2.x, r2.w) && INTERSECTS(r1.y, r1.h, r2.y, r2.h))
+        if (BAGT_INTERSECTS(r1.x, r1.w, r2.x, r2.w) && BAGT_INTERSECTS(r1.y, r1.h, r2.y, r2.h))
             return 1;
     }
 
@@ -38,7 +47,7 @@ static inline int doesIntersect(Rectangle r1, const Rectangle *rects, int count)
 }
 
 
-#define SORT_TWO(longer, shorter, a, b) { \
+#define BAGT_SORT_TWO(longer, shorter, a, b) { \
     if (a < b) { \
         longer = b; \
         shorter = a; \
@@ -49,16 +58,16 @@ static inline int doesIntersect(Rectangle r1, const Rectangle *rects, int count)
 }
 
 
-static int compareRectangles(const void *a, const void *b)
+static int bagT_compareRectangles(const void *a, const void *b)
 {
-    Rectangle *ar = (Rectangle*)a;
-    Rectangle *br = (Rectangle*)b;
+    bagT_Rectangle *ar = (bagT_Rectangle*)a;
+    bagT_Rectangle *br = (bagT_Rectangle*)b;
 
     int longerA, shorterA;
     int longerB, shorterB;
 
-    SORT_TWO(longerA, shorterA, ar->w, ar->h);
-    SORT_TWO(longerB, shorterB, br->w, br->h);
+    BAGT_SORT_TWO(longerA, shorterA, ar->w, ar->h);
+    BAGT_SORT_TWO(longerB, shorterB, br->w, br->h);
 
     if (longerA > longerB || (longerA == longerB && shorterA > shorterB)) {
         return -1;
@@ -70,35 +79,34 @@ static int compareRectangles(const void *a, const void *b)
 }
 
 
-void packRectangles(Rectangle *rects, int count)
+void bagT_packRectangles(bagT_Rectangle *rects, int count)
 {
     int placedCount = 1;
 
-    // sortRects(rects, count);
-    qsort(rects, count, sizeof(Rectangle), &compareRectangles);
+    qsort(rects, count, sizeof(bagT_Rectangle), &bagT_compareRectangles);
     rects->x = 0;
     rects->y = 0;
 
-    for (Rectangle *rect = rects + 1; rect < rects + count; rect++) {
+    for (bagT_Rectangle *rect = rects + 1; rect < rects + count; rect++) {
         int bestX = -1, bestY = -1;
         int smallestLongerReach = INT_MAX;
         int smallestShorterReach = INT_MAX;
-        Rectangle *bestPlaced = NULL;
+        bagT_Rectangle *bestPlaced = NULL;
         int bestPlacedSide = 0;
 
-        for (Rectangle *placed = rects; placed < rects + placedCount; placed++) {
-            Rectangle testRect = { placed->x + placed->w, placed->y, rect->w, rect->h };
+        for (bagT_Rectangle *placed = rects; placed < rects + placedCount; placed++) {
+            bagT_Rectangle testRect = { placed->x + placed->w, placed->y, rect->w, rect->h };
 
             if (!(testRect.flags & 0x01)) {
                 int reachX = testRect.x + rect->w;
                 int reachY = testRect.y + rect->h;
                 int newLongerReach, newShorterReach;
-                SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
+                BAGT_SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
 
                 if ((newLongerReach < smallestLongerReach) ||
                     (newLongerReach == smallestLongerReach && newShorterReach < smallestShorterReach))
                 {
-                    if (!doesIntersect(testRect, rects, placedCount)) {
+                    if (!bagT_doesIntersect(testRect, rects, placedCount)) {
                         bestX = testRect.x;
                         bestY = testRect.y;
                         smallestLongerReach = newLongerReach;
@@ -116,12 +124,12 @@ void packRectangles(Rectangle *rects, int count)
                 int reachX = testRect.x + rect->w;
                 int reachY = testRect.y + rect->h;
                 int newLongerReach, newShorterReach;
-                SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
+                BAGT_SORT_TWO(newLongerReach, newShorterReach, reachX, reachY);
 
                 if ((newLongerReach < smallestLongerReach) ||
                     (newLongerReach == smallestLongerReach && newShorterReach < smallestShorterReach))
                 {
-                    if (!doesIntersect(testRect, rects, placedCount)) {
+                    if (!bagT_doesIntersect(testRect, rects, placedCount)) {
                         bestX = testRect.x;
                         bestY = testRect.y;
                         smallestLongerReach = newLongerReach;
@@ -142,57 +150,57 @@ void packRectangles(Rectangle *rects, int count)
 }
 
 
-#define NONE 0
+#define BAGT_NONE 0
 
 
-typedef uint64_t Span;
+typedef uint64_t bagT_Span;
 
 typedef enum {
-    Left,
-    Right,
-    Middle,
+    bagT_Left,
+    bagT_Right,
+    bagT_Middle,
 
-    ChildCount,
-    NoChild
-} Child;
+    bagT_ChildCount,
+    bagT_NoChild
+} bagT_Child;
 
 
 typedef struct {
     uint32_t x, y;
     uint32_t w, h;
-} Info;
+} bagT_Info;
 
 typedef struct {
-    Info maxW;
-    Info maxH;
-    Info maxS;
+    bagT_Info maxW;
+    bagT_Info maxH;
+    bagT_Info maxS;
 
     int next;
-} Area;
+} bagT_Area;
 
 typedef struct {
     int index;
-    Child child;
-} Place;
+    bagT_Child child;
+} bagT_Place;
 
 typedef struct {
     uint32_t x, y;
     uint32_t w, h;
 
     int id;
-    Place parent;
+    bagT_Place parent;
 
-    Area areas[3];
-} Rect;
+    bagT_Area areas[3];
+} bagT_Rect;
 
 typedef struct {
     int fits;
-    Span span;
-} Score;
+    bagT_Span span;
+} bagT_Score;
 
 
-
-void printRect(const Rect *rect)
+#if 0
+void bagT_printRect(const Rect *rect)
 {
     Info info;
     printf("rect:\n");
@@ -238,15 +246,15 @@ void printRect(const Rect *rect)
     printf("      x: %u, y: %u, w: %u, h: %u\n", info.x, info.y, info.w, info.h);
     printf("    next: %d\n", rect->areas[Middle].next);
 }
+#endif
 
 
-
-static inline int max(uint32_t a, uint32_t b)
+static inline int bagT_max(uint32_t a, uint32_t b)
 {
     return a > b ? a : b;
 }
 
-static inline Span getSpan(uint32_t w, uint32_t h)
+static inline bagT_Span bagT_getSpan(uint32_t w, uint32_t h)
 {
     if (h > w) {
         uint32_t t = w;
@@ -257,31 +265,31 @@ static inline Span getSpan(uint32_t w, uint32_t h)
     return ((uint64_t)w << 32) | (uint64_t)h;
 }
 
-static inline int fits(uint32_t w1, uint32_t h1, uint32_t w2, uint32_t h2)
+static inline int bagT_fits(uint32_t w1, uint32_t h1, uint32_t w2, uint32_t h2)
 {
     return w1 <= w2 && h1 <= h2;
 }
 
-static inline Score scoreArea(Area area, uint32_t w, uint32_t h)
+static inline bagT_Score bagT_scoreArea(bagT_Area area, uint32_t w, uint32_t h)
 {
-    Info i;
-    Span span;
-    Score score = { 0, 0xffffffffffffffff };
+    bagT_Info i;
+    bagT_Span span;
+    bagT_Score score = { 0, 0xffffffffffffffff };
 
     i = area.maxW;
-    if (fits(w, h, i.w, i.h) && (span = getSpan(i.x + w, i.y + h)) < score.span) {
+    if (bagT_fits(w, h, i.w, i.h) && (span = bagT_getSpan(i.x + w, i.y + h)) < score.span) {
         score.fits = 1;
         score.span = span;
     }
 
     i = area.maxH;
-    if (fits(w, h, i.w, i.h) && (span = getSpan(i.x + w, i.y + h)) < score.span) {
+    if (bagT_fits(w, h, i.w, i.h) && (span = bagT_getSpan(i.x + w, i.y + h)) < score.span) {
         score.fits = 1;
         score.span = span;
     }
 
     i = area.maxS;
-    if (fits(w, h, i.w, i.h) && (span = getSpan(i.x + w, i.y + h)) < score.span) {
+    if (bagT_fits(w, h, i.w, i.h) && (span = bagT_getSpan(i.x + w, i.y + h)) < score.span) {
         score.fits = 1;
         score.span = span;
     }
@@ -289,38 +297,38 @@ static inline Score scoreArea(Area area, uint32_t w, uint32_t h)
     return score;
 }
 
-static Place searchHelper(uint32_t w, uint32_t h, int searchee, Rect *rects)
+static bagT_Place bagT_searchHelper(uint32_t w, uint32_t h, int searchee, bagT_Rect *rects)
 {
-    Child child = NoChild;
-    Score bestScore = { 0, 0xffffffffffffffff };
-    Area *areas = rects[searchee].areas;
+    bagT_Child child = bagT_NoChild;
+    bagT_Score bestScore = { 0, 0xffffffffffffffff };
+    bagT_Area *areas = rects[searchee].areas;
 
-    for (Child i = Left; i < ChildCount; i++) {
-        Score score = scoreArea(areas[i], w, h);
+    for (bagT_Child i = bagT_Left; i < bagT_ChildCount; i++) {
+        bagT_Score score = bagT_scoreArea(areas[i], w, h);
         if (score.fits && score.span < bestScore.span) {
             child = i;
             bestScore = score;
         }
     }
 
-    if (child == NoChild) {
+    if (child == bagT_NoChild) {
         printf("bruh what the hell bruh!\n");
     }
 
-    if (areas[child].next == NONE) {
-        Place output = { searchee, child };
+    if (areas[child].next == BAGT_NONE) {
+        bagT_Place output = { searchee, child };
         return output;
     }
 
-    return searchHelper(w, h, areas[child].next, rects);
+    return bagT_searchHelper(w, h, areas[child].next, rects);
 }
 
-static inline Place search(int searcher, int searchee, Rect *rects)
+static inline bagT_Place bagT_search(int searcher, int searchee, bagT_Rect *rects)
 {
-    return searchHelper(rects[searcher].w, rects[searcher].h, searchee, rects);
+    return bagT_searchHelper(rects[searcher].w, rects[searcher].h, searchee, rects);
 }
 
-static inline Info getMaxWidth(Info a, Info b, Info c)
+static inline bagT_Info bagT_getMaxWidth(bagT_Info a, bagT_Info b, bagT_Info c)
 {
     if (b.w > a.w || (b.w == a.w && b.h > a.h)) {
         a = b;
@@ -331,7 +339,7 @@ static inline Info getMaxWidth(Info a, Info b, Info c)
     return a;
 }
 
-static inline Info getMaxHeight(Info a, Info b, Info c)
+static inline bagT_Info bagT_getMaxHeight(bagT_Info a, bagT_Info b, bagT_Info c)
 {
     if (b.h > a.h || (b.h == a.h && b.w > a.w)) {
         a = b;
@@ -342,7 +350,7 @@ static inline Info getMaxHeight(Info a, Info b, Info c)
     return a;
 }
 
-static inline Info getMaxSquare(Info a, Info b, Info c)
+static inline bagT_Info bagT_getMaxSquare(bagT_Info a, bagT_Info b, bagT_Info c)
 {
     if ((uint64_t)(b.w) * (uint64_t)(b.h) > (uint64_t)(a.w) * (uint64_t)(a.h)) {
         a = b;
@@ -353,19 +361,19 @@ static inline Info getMaxSquare(Info a, Info b, Info c)
     return a;
 }
 
-static inline Area getMaximums(const Area *areas)
+static inline bagT_Area bagT_getMaximums(const bagT_Area *areas)
 {
-    Area output = {
-        .maxW = getMaxWidth(areas[Left].maxW, areas[Right].maxW, areas[Middle].maxW),
-        .maxH = getMaxHeight(areas[Left].maxH, areas[Right].maxH, areas[Middle].maxH),
-        .maxS = getMaxSquare(areas[Left].maxS, areas[Right].maxS, areas[Middle].maxS)
+    bagT_Area output = {
+        .maxW = bagT_getMaxWidth(areas[bagT_Left].maxW, areas[bagT_Right].maxW, areas[bagT_Middle].maxW),
+        .maxH = bagT_getMaxHeight(areas[bagT_Left].maxH, areas[bagT_Right].maxH, areas[bagT_Middle].maxH),
+        .maxS = bagT_getMaxSquare(areas[bagT_Left].maxS, areas[bagT_Right].maxS, areas[bagT_Middle].maxS)
     };
     return output;
 }
 
-static void updateMaximums(Area maximums, Place place, Rect *rects)
+static void bagT_updateMaximums(bagT_Area maximums, bagT_Place place, bagT_Rect *rects)
 {
-    Area *areas = rects[place.index].areas;
+    bagT_Area *areas = rects[place.index].areas;
     areas[place.child].maxW = maximums.maxW;
     areas[place.child].maxH = maximums.maxH;
     areas[place.child].maxS = maximums.maxS;
@@ -374,13 +382,13 @@ static void updateMaximums(Area maximums, Place place, Rect *rects)
         return;
     }
 
-    updateMaximums(getMaximums(areas), rects[place.index].parent, rects);
+    bagT_updateMaximums(bagT_getMaximums(areas), rects[place.index].parent, rects);
 }
 
-static inline void insert(int rectIndex, Rect *rects, Place place)
+static inline void bagT_insert(int rectIndex, bagT_Rect *rects, bagT_Place place)
 {
-    Rect *parent = rects + place.index;
-    Rect *rect = rects + rectIndex;
+    bagT_Rect *parent = rects + place.index;
+    bagT_Rect *rect = rects + rectIndex;
 
     parent->areas[place.child].next = rectIndex;
     rect->parent = place;
@@ -388,77 +396,73 @@ static inline void insert(int rectIndex, Rect *rects, Place place)
     rect->x = parent->x;
     rect->y = parent->y;
 
-    if (place.child == Left || place.child == Middle) {
+    if (place.child == bagT_Left || place.child == bagT_Middle) {
         rect->x += parent->w;
     }
-    if (place.child == Right || place.child == Middle) {
+    if (place.child == bagT_Right || place.child == bagT_Middle) {
         rect->y += parent->h;
     }
 
-    Info space;
+    bagT_Info space;
     switch (place.child) {
-        case Left:
-            space = parent->areas[Left].maxW;
+        case bagT_Left:
+            space = parent->areas[bagT_Left].maxW;
             break;
-        case Right:
-            space = parent->areas[Right].maxW;
+        case bagT_Right:
+            space = parent->areas[bagT_Right].maxW;
             break;
-        case Middle:
-            space = parent->areas[Middle].maxW;
+        case bagT_Middle:
+            space = parent->areas[bagT_Middle].maxW;
             break;
         default:
             break;
     }
 
-    Info info;
+    bagT_Info info;
     // Left
     info.x = rect->x + rect->w;
     info.y = rect->y;
     info.w = space.w - rect->w;
     info.h = rect->h;
-    rect->areas[Left].maxW = info;
-    rect->areas[Left].maxH = info;
-    rect->areas[Left].maxS = info;
-    rect->areas[Left].next = NONE;
+    rect->areas[bagT_Left].maxW = info;
+    rect->areas[bagT_Left].maxH = info;
+    rect->areas[bagT_Left].maxS = info;
+    rect->areas[bagT_Left].next = BAGT_NONE;
     // Right
     info.x = rect->x;
     info.y = rect->y + rect->h;
     info.w = rect->w;
     info.h = space.h - rect->h;
-    rect->areas[Right].maxW = info;
-    rect->areas[Right].maxH = info;
-    rect->areas[Right].maxS = info;
-    rect->areas[Right].next = NONE;
+    rect->areas[bagT_Right].maxW = info;
+    rect->areas[bagT_Right].maxH = info;
+    rect->areas[bagT_Right].maxS = info;
+    rect->areas[bagT_Right].next = BAGT_NONE;
     // Middle
     info.x = rect->x + rect->w;
     info.y = rect->y + rect->h;
     info.w = space.w - rect->w;
     info.h = space.h - rect->h;
-    rect->areas[Middle].maxW = info;
-    rect->areas[Middle].maxH = info;
-    rect->areas[Middle].maxS = info;
-    rect->areas[Middle].next = NONE;
+    rect->areas[bagT_Middle].maxW = info;
+    rect->areas[bagT_Middle].maxH = info;
+    rect->areas[bagT_Middle].maxS = info;
+    rect->areas[bagT_Middle].next = BAGT_NONE;
 
-    updateMaximums(getMaximums(rect->areas), place, rects);
+    bagT_updateMaximums(bagT_getMaximums(rect->areas), place, rects);
 }
 
-static inline void packRect(int index, Rect *rects)
+static inline void bagT_packRect(int index, bagT_Rect *rects)
 {
-    // for (int i = 0; i < index; i++) {
-        // printRect(rects + i);
-    // }
-    Place place = search(index, 0, rects);
-    // printf("place: index: %d, child: %d\n", place.index, place.child);
-    insert(index, rects, place);
+    bagT_Place place = bagT_search(index, 0, rects);
+    bagT_insert(index, rects, place);
 }
 
-static int compareRects(const void *a, const void *b)
+static int bagT_compareRects(const void *a, const void *b)
 {
-    Rect *rectA = (Rect*)a;
-    Rect *rectB = (Rect*)b;
+    bagT_Rect *rectA = (bagT_Rect*)a;
+    bagT_Rect *rectB = (bagT_Rect*)b;
 
-    Span spanA = getSpan(rectA->w, rectA->h);
-    Span spanB = getSpan(rectB->w, rectB->h);
+    bagT_Span spanA = bagT_getSpan(rectA->w, rectA->h);
+    bagT_Span spanB = bagT_getSpan(rectB->w, rectB->h);
 
     if (spanA > spanB) {
         return -1;
@@ -469,70 +473,73 @@ static int compareRects(const void *a, const void *b)
     return 0;
 }
 
-void packRects(Rect *rects, int rectCount)
+void bagT_packRects(bagT_Rect *rects, int rectCount)
 {
-    qsort(rects, rectCount, sizeof(Rect), &compareRects);
+    qsort(rects, rectCount, sizeof(bagT_Rect), &bagT_compareRects);
 
     rects[0].x = 0;
     rects[0].y = 0;
 
-    Info info;
+    bagT_Info info;
     // Left
     info.x = rects[0].w;
     info.y = 0;
     info.w = INT_MAX;
     info.h = rects[0].h;
-    rects[0].areas[Left].maxW = info;
-    rects[0].areas[Left].maxH = info;
-    rects[0].areas[Left].maxS = info;
-    rects[0].areas[Left].next = NONE;
+    rects[0].areas[bagT_Left].maxW = info;
+    rects[0].areas[bagT_Left].maxH = info;
+    rects[0].areas[bagT_Left].maxS = info;
+    rects[0].areas[bagT_Left].next = BAGT_NONE;
     // Right
     info.x = 0;
     info.y = rects[0].h;
     info.w = rects[0].w;
     info.h = INT_MAX;
-    rects[0].areas[Right].maxW = info;
-    rects[0].areas[Right].maxH = info;
-    rects[0].areas[Right].maxS = info;
-    rects[0].areas[Right].next = NONE;
+    rects[0].areas[bagT_Right].maxW = info;
+    rects[0].areas[bagT_Right].maxH = info;
+    rects[0].areas[bagT_Right].maxS = info;
+    rects[0].areas[bagT_Right].next = BAGT_NONE;
     // Middle
     info.x = rects[0].w;
     info.y = rects[0].h;
     info.w = INT_MAX;
     info.h = INT_MAX;
-    rects[0].areas[Middle].maxW = info;
-    rects[0].areas[Middle].maxH = info;
-    rects[0].areas[Middle].maxS = info;
-    rects[0].areas[Middle].next = NONE;
+    rects[0].areas[bagT_Middle].maxW = info;
+    rects[0].areas[bagT_Middle].maxH = info;
+    rects[0].areas[bagT_Middle].maxS = info;
+    rects[0].areas[bagT_Middle].next = BAGT_NONE;
 
     for (int i = 1; i < rectCount; i++) {
-        // printf("%d\n", i);
-        packRect(i, rects);
+        bagT_packRect(i, rects);
     }
 }
 
-#if 0
-int main()
+
+static int bagT_fastPackRectangles(bagT_Rectangle *rectangles, int count)
 {
-    const int rectCount = 1000;
-    const uint32_t maxSpan = 20;
-    const uint32_t minSpan = 5;
-
-    Rect *rects = malloc(rectCount * sizeof(Rect));
-    for (int i = 0; i < rectCount; i++) {
-        rects[i].w = minSpan + (rand() % (maxSpan - minSpan));
-        rects[i].h = minSpan + (rand() % (maxSpan - minSpan));
-        rects[i].id = i;
+    bagT_Rect *rects = malloc(count * sizeof(bagT_Rect));
+    if (!rects) {
+        fprintf(stderr, "bag text: Malloc fail!\nFile: %s, Line: %d\n", __FILE__, __LINE__);
+        return 1;
     }
 
-    packRects(rects, rectCount);
-
-    for (int i = 0; i < rectCount; i++) {
-        // printRect(rects + i);
-        printf("%d %d %d %d\n", rects[i].x, rects[i].y, rects[i].w, rects[i].h);
+    for (int i = 0; i < count; i++) {
+        rects[i].w = rectangles[i].w;
+        rects[i].h = rectangles[i].h;
+        rects[i].id = rectangles[i].index;
     }
 
-    free(rects);
+    bagT_packRects(rects, count);
+
+    for (int i = 0; i < count; i++) {
+        rectangles[i].x = rects[i].x;
+        rectangles[i].y = rects[i].y;
+        rectangles[i].w = rects[i].w;
+        rectangles[i].h = rects[i].h;
+        rectangles[i].index = rects[i].id;
+    }
+
     return 0;
 }
-#endif
+
+

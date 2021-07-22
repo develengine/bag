@@ -25,51 +25,14 @@
 #define BAGT_MAGIC_NUMBER 0x23456341
 
 
-typedef struct
-{
-    int x, y;
-    int w, h;
-    int flags;
-    int index;
-} Rectangle;
-
-
 #include "rect_pack.c"
-
-
-static int packEmUp(Rectangle *rectangles, int count)
-{
-    Rect *rects = malloc(count * sizeof(Rect));
-    if (!rects) {
-        BAGT_MALLOC_ERROR();
-        return 1;
-    }
-
-    for (int i = 0; i < count; i++) {
-        rects[i].w = rectangles[i].w;
-        rects[i].h = rectangles[i].h;
-        rects[i].id = rectangles[i].index;
-    }
-
-    packRects(rects, count);
-
-    for (int i = 0; i < count; i++) {
-        rectangles[i].x = rects[i].x;
-        rectangles[i].y = rects[i].y;
-        rectangles[i].w = rects[i].w;
-        rectangles[i].h = rects[i].h;
-        rectangles[i].index = rects[i].id;
-    }
-
-    return 0;
-}
 
 
 typedef struct  // TODO pack into 16 bytes
 {
     int x, y, w, h;
     int xOff, yOff;
-} Glyph;
+} bagT_Glyph;
 
 typedef struct
 {
@@ -77,10 +40,10 @@ typedef struct
     float fontScale;
 
     int glyphCount;
-    Glyph *glyphBuffer;
+    bagT_Glyph *glyphBuffer;
 
     unsigned char *atlasBuffer;
-    Size atlasSpan;
+    bagT_Size atlasSpan;
 } bagT_InstanceData;
 
 
@@ -95,7 +58,7 @@ struct bagT_Instance
 {
     bagT_Font *font;
     float fontScale;
-    Glyph *glyphBuffer;
+    bagT_Glyph *glyphBuffer;
     unsigned int vao;
     unsigned int atlas;
     unsigned int glyphs;
@@ -458,8 +421,8 @@ error_exit:
 static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, float fontSize, int fastPack)
 {
     unsigned char **bitmaps = NULL;
-    Rectangle *rects = NULL;
-    Glyph *glyphs = NULL;
+    bagT_Rectangle *rects = NULL;
+    bagT_Glyph *glyphs = NULL;
     unsigned char *atlasBuffer = NULL;
 
     float fontScale = stbtt_ScaleForPixelHeight(&font->fontInfo, fontSize);
@@ -474,13 +437,13 @@ static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, flo
         goto error_exit;
     }
 
-    rects = malloc(glyphCount * sizeof(Rectangle));
+    rects = malloc(glyphCount * sizeof(bagT_Rectangle));
     if (!rects) {
         BAGT_MALLOC_ERROR();
         goto error_exit;
     }
 
-    glyphs = malloc(glyphCount * sizeof(Glyph));
+    glyphs = malloc(glyphCount * sizeof(bagT_Glyph));
     if (!glyphs) {
         BAGT_MALLOC_ERROR();
         goto error_exit;
@@ -514,12 +477,12 @@ static int bagT_createInstanceData(bagT_InstanceData *data, bagT_Font *font, flo
 
 
     if (fastPack) {
-        packEmUp(rects, glyphCount);
+        bagT_fastPackRectangles(rects, glyphCount);
     } else {
-        packRectangles(rects, glyphCount);
+        bagT_packRectangles(rects, glyphCount);
     }
 
-    Size atlasSpan = getSize(rects, glyphCount);
+    bagT_Size atlasSpan = getSize(rects, glyphCount);
     atlasSpan.w = ceil(atlasSpan.w / 4.f) * 4;  // necessary for alignment
 
     atlasBuffer = malloc(atlasSpan.w * atlasSpan.h);
@@ -613,7 +576,7 @@ static bagT_Instance *bagT_makeInstance(bagT_InstanceData data)
     glBindBuffer(GL_SHADER_STORAGE_BUFFER, instance->glyphs);
     glBufferData(
             GL_SHADER_STORAGE_BUFFER,
-            data.glyphCount * sizeof(Glyph),
+            data.glyphCount * sizeof(bagT_Glyph),
             data.glyphBuffer,
             GL_STATIC_DRAW
     );
@@ -673,7 +636,7 @@ int bagT_createInstanceFile(bagT_Font *font, float fontSize, const char *fileNam
     BAGT_WRITE(&(data.glyphCount), sizeof(int), 1, file);
     BAGT_WRITE(&(data.atlasSpan.w), sizeof(int), 1, file);
     BAGT_WRITE(&(data.atlasSpan.h), sizeof(int), 1, file);
-    BAGT_WRITE(data.glyphBuffer, sizeof(Glyph), data.glyphCount, file);
+    BAGT_WRITE(data.glyphBuffer, sizeof(bagT_Glyph), data.glyphCount, file);
     BAGT_WRITE(data.atlasBuffer, sizeof(unsigned char), atlasSize, file);
 
     fclose(file);
@@ -720,12 +683,12 @@ bagT_Instance *bagT_loadInstanceFile(bagT_Font *font, const char *fileName)
     BAGT_READ(&(data.atlasSpan.w), sizeof(int), 1, file);
     BAGT_READ(&(data.atlasSpan.h), sizeof(int), 1, file);
 
-    data.glyphBuffer = malloc(data.glyphCount * sizeof(Glyph));
+    data.glyphBuffer = malloc(data.glyphCount * sizeof(bagT_Glyph));
     if (!data.glyphCount) {
         BAGT_MALLOC_ERROR();
         goto error_exit;
     }
-    BAGT_READ(data.glyphBuffer, sizeof(Glyph), data.glyphCount, file);
+    BAGT_READ(data.glyphBuffer, sizeof(bagT_Glyph), data.glyphCount, file);
 
     int atlasSize = data.atlasSpan.w * data.atlasSpan.h;
     data.atlasBuffer = malloc(atlasSize * sizeof(unsigned char));
