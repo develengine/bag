@@ -102,6 +102,148 @@ static struct BagT
 } bagT;
 
 
+static const char * const bagT_simpleVertexSource =
+    "#version 430 core\n"
+    "const int MAX_CHARS_LENGTH = 512;\n"
+    "const float O_1 = 0.9999;\n"
+    "const float O_0 = 0;\n"
+    "const vec2 data[6] = {\n"
+    "    vec2(O_0, O_0),\n"
+    "    vec2(O_1, O_0),\n"
+    "    vec2(O_1, O_1),\n"
+    "    vec2(O_1, O_1),\n"
+    "    vec2(O_0, O_1),\n"
+    "    vec2(O_0, O_0)\n"
+    "};\n"
+    "out V_OUT\n"
+    "{\n"
+    "    flat ivec2 origin;\n"
+    "    flat ivec2 size;\n"
+    "    vec2  move;\n"
+    "    vec4  color;\n"
+    "} frag;\n"
+    "uniform ivec2 u_screenRes;\n"
+    "uniform ivec2 u_position;\n"
+    "uniform vec2 u_scale;\n"
+    "uniform ivec4 u_chars[MAX_CHARS_LENGTH];\n"
+    "struct Glyph\n"
+    "{\n"
+    "    int x;\n"
+    "    int y;\n"
+    "    int w;\n"
+    "    int h;\n"
+    "    int xOff;\n"
+    "    int yOff;\n"
+    "};\n"
+    "layout(std430, binding = 0) readonly buffer GlyphBuffer\n"
+    "{\n"
+    "    Glyph glyphs[];\n"
+    "};\n"
+    "void main()\n"
+    "{\n"
+    "    ivec4 ch    = u_chars[gl_InstanceID];\n"
+    "    Glyph glyph = glyphs[ch.w];\n"
+    "    ivec2 ipos  = u_position + ivec2(ch.xy * u_scale)\n"
+    "                + ivec2(glyph.xOff * u_scale.x, glyph.yOff * u_scale.y);\n"
+    "    vec2 coord  = data[gl_VertexID];\n"
+    "    vec2 scoord = coord * ((vec2(glyph.w, glyph.h) * u_scale) / u_screenRes)\n"
+    "                + (vec2(ipos) / u_screenRes);\n"
+    "    vec2 vcoord = vec2(scoord.x, 1.0 - scoord.y) * 2.0 - 1.0;\n"
+    "    frag.origin = ivec2(glyph.x, glyph.y);\n"
+    "    frag.size   = ivec2(glyph.w, glyph.h);\n"
+    "    frag.move   = coord;\n"
+    "    frag.color  = unpackUnorm4x8(ch.z);\n"
+    "    gl_Position = vec4(vcoord, 1.0, 1.0);\n"
+    "}\n";
+
+static const char * const bagT_simpleFragmentSource =
+    "#version 430 core\n"
+    "in V_OUT\n"
+    "{\n"
+    "    flat ivec2 origin;\n"
+    "    flat ivec2 size;\n"
+    "    vec2  move;\n"
+    "    vec4  color;\n"
+    "} vert;\n"
+    "layout(location = 0) out vec4 outColor;\n"
+    "layout(binding = 0) uniform sampler2D atlas;\n"
+    "void main()\n"
+    "{\n"
+    "    float alpha = texelFetch(atlas, vert.origin + ivec2(vert.size * vert.move), 0).r;\n"
+    "    outColor = vec4(vert.color.rgb, vert.color.a * alpha);\n"
+    "}\n";
+
+static const char * const bagT_memoryVertexSource =
+    "#version 430 core\n"
+    "const int MAX_CHARS_LENGTH = 128;\n"
+    "const float O_1 = 0.9999;\n"
+    "const float O_0 = 0;\n"
+    "const vec2 data[6] = {\n"
+    "    vec2(O_0, O_0),\n"
+    "    vec2(O_1, O_0),\n"
+    "    vec2(O_1, O_1),\n"
+    "    vec2(O_1, O_1),\n"
+    "    vec2(O_0, O_1),\n"
+    "    vec2(O_0, O_0)\n"
+    "};\n"
+    "layout(location = 0) in ivec4 ch;\n"
+    "out V_OUT\n"
+    "{\n"
+    "    flat ivec2 origin;\n"
+    "    flat ivec2 size;\n"
+    "    vec2  move;\n"
+    "    vec4  color;\n"
+    "} frag;\n"
+    "uniform ivec2 u_screenRes;\n"
+    "uniform ivec2 u_position;\n"
+    "uniform vec2 u_scale;\n"
+    "struct Glyph\n"
+    "{\n"
+    "    int x;\n"
+    "    int y;\n"
+    "    int w;\n"
+    "    int h;\n"
+    "    int xOff;\n"
+    "    int yOff;\n"
+    "};\n"
+    "layout(std430, binding = 0) readonly buffer GlyphBuffer\n"
+    "{\n"
+    "    Glyph glyphs[];\n"
+    "};\n"
+    "void main()\n"
+    "{\n"
+    "    Glyph glyph = glyphs[ch.w];\n"
+    "    ivec2 ipos  = u_position + ivec2(ch.xy * u_scale)\n"
+    "                + ivec2(glyph.xOff * u_scale.x, glyph.yOff * u_scale.y);\n"
+    "    vec2 coord  = data[gl_VertexID];\n"
+    "    vec2 scoord = coord * ((vec2(glyph.w, glyph.h) * u_scale) / u_screenRes)\n"
+    "                + (vec2(ipos) / u_screenRes);\n"
+    "    vec2 vcoord = vec2(scoord.x, 1.0 - scoord.y) * 2.0 - 1.0;\n"
+    "    frag.origin = ivec2(glyph.x, glyph.y);\n"
+    "    frag.size   = ivec2(glyph.w, glyph.h);\n"
+    "    frag.move   = coord;\n"
+    "    frag.color  = unpackUnorm4x8(ch.z);\n"
+    "    gl_Position = vec4(vcoord, 1.0, 1.0);\n"
+    "}\n";
+
+static const char * const bagT_memoryFragmentSource =
+    "#version 430 core\n"
+    "in V_OUT\n"
+    "{\n"
+    "    flat ivec2 origin;\n"
+    "    flat ivec2 size;\n"
+    "    vec2  move;\n"
+    "    vec4  color;\n"
+    "} vert;\n"
+    "layout(location = 0) out vec4 outColor;\n"
+    "layout(binding = 0) uniform sampler2D atlas;\n"
+    "void main()\n"
+    "{\n"
+    "    float alpha = texelFetch(atlas, vert.origin + ivec2(vert.size * vert.move), 0).r;\n"
+    "    outColor = vec4(vert.color.rgb, vert.color.a * alpha);\n"
+    "}\n";
+
+
 static void bagT_destroyShader(bagT_Shader *shader)
 {
     glDeleteShader(shader->vertexShader);
@@ -110,71 +252,16 @@ static void bagT_destroyShader(bagT_Shader *shader)
 }
 
 
-
-static char *bagT_readFileToString(const char *path)
-{
-    FILE *file = fopen(path, "rb");
-    
-    if (!file)
-        return NULL;
-
-    if (fseek(file, 0, SEEK_END)) {
-        BAGT_FILE_ERROR();
-        return NULL;
-    }
-
-    int size = ftell(file);
-    if (size == -1L) {
-        BAGT_FILE_ERROR();
-        return NULL;
-    }
-
-    rewind(file);
-    
-    char *data = malloc(size);
-    if (!data) {
-        BAGT_MALLOC_ERROR();
-        return NULL;
-    }
-
-    if (fread(data, 1, size, file) != size) {
-        BAGT_FILE_ERROR();
-        free(data);
-        return NULL;
-    }
-
-    if (fclose(file))
-        BAGT_FILE_ERROR();
-
-    data[size - 1] = '\0';
-
-    return data;
-}
-
-
 static int bagT_loadShader(
-        const char *vertexPath,
-        const char *fragmentPath,
+        const char *vertexSource,
+        const char *fragmentSource,
         unsigned int *vertexShader,
         unsigned int *fragmentShader,
         unsigned int *shaderProgram)
 {
-    char *vertexSource = NULL, *fragmentSource = NULL;
     unsigned int vertex = 0, fragment = 0, program = 0;
     int success;
     char infoLog[512];
-
-    vertexSource = bagT_readFileToString(vertexPath);
-    if (!vertexSource) {
-        fprintf(stderr, "bag text: Failed to load vertex shader source code!\n");
-        goto error_exit;
-    }
-
-    fragmentSource = bagT_readFileToString(fragmentPath);
-    if (!fragmentSource) {
-        fprintf(stderr, "bag text: Failed to load fragment shader source code!\n");
-        goto error_exit;
-    }
 
     vertex = glCreateShader(GL_VERTEX_SHADER);
     glShaderSource(vertex, 1, (const char * const*)&vertexSource, NULL);
@@ -186,9 +273,6 @@ static int bagT_loadShader(
         goto error_exit;
     }
 
-    free(vertexSource);
-    vertexSource = NULL;
-
     fragment = glCreateShader(GL_FRAGMENT_SHADER);
     glShaderSource(fragment, 1, (const char * const*)&fragmentSource, NULL);
     glCompileShader(fragment);
@@ -198,9 +282,6 @@ static int bagT_loadShader(
         fprintf(stderr, "bag text: Failed to compile fragment shader!\nError: %s\n", infoLog);
         goto error_exit;
     }
-
-    free(fragmentSource);
-    fragmentSource = NULL;
 
     program = glCreateProgram();
     glAttachShader(program, vertex);
@@ -219,8 +300,6 @@ static int bagT_loadShader(
     return 0;
 
 error_exit:
-    free(fragmentSource);
-    free(vertexSource);
     glDeleteShader(vertex);
     glDeleteShader(fragment);
     glDeleteProgram(program);
@@ -238,8 +317,8 @@ int bagT_init(int screenWidth, int screenHeight)
     bagT.boundInstance = NULL;
 
     int result = bagT_loadShader(
-            "shaders/simple_vert.glsl",
-            "shaders/simple_frag.glsl",
+            bagT_simpleVertexSource,
+            bagT_simpleFragmentSource,
             &bagT.simple.vertexShader,
             &bagT.simple.fragmentShader,
             &bagT.simple.shaderProgram
@@ -259,8 +338,8 @@ int bagT_init(int screenWidth, int screenHeight)
     BAGT_UNIFORM_CHECK(bagT.simple.uni.scale, "u_scale");
 
     result = bagT_loadShader(
-            "shaders/memory_vert.glsl",
-            "shaders/memory_frag.glsl",
+            bagT_memoryVertexSource,
+            bagT_memoryFragmentSource,
             &bagT.memory.vertexShader,
             &bagT.memory.fragmentShader,
             &bagT.memory.shaderProgram
