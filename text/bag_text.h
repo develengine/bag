@@ -63,8 +63,8 @@ typedef struct
 typedef void (*bagT_Compositor) (bagT_Instance*, void*, bagT_Char*, int*, int);
 
 
-int bagT_init(int screenWidth, int screenHeight);
-void bagT_updateResolution(int screenWidth, int screenHeight);
+int bagT_init(int windowWidth, int windowHeight);
+void bagT_updateResolution(int windowWidth, int windowHeight);
 void bagT_useProgram(bagT_Program program);
 void bagT_destroy();
 

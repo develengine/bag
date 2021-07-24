@@ -30,7 +30,7 @@ int bagE_main(int argc, char *argv[])
     glEnable(GL_DEBUG_OUTPUT);
     glDebugMessageCallback(openglCallback, 0); 
 
-    bagE_setWindowTitle("Font rendering test");
+    bagE_setWindowTitle("Console test");
 
     int winWidth, winHeight;
     bagE_getWindowSize(&winWidth, &winHeight);
@@ -42,16 +42,12 @@ int bagE_main(int argc, char *argv[])
 
     bagE_setSwapInterval(1);
 
-#if 1
-        glClearColor(
-                0x0d / 255.f,
-                0x11 / 255.f,
-                0x17 / 255.f,
-                1.0f
-        );
-#else
-        glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
-#endif
+    glClearColor(
+            0x0d / 255.f,
+            0x11 / 255.f,
+            0x17 / 255.f,
+            1.0f
+    );
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);

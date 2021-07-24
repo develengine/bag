@@ -312,7 +312,7 @@ error_exit:
         fprintf(stderr, "bag text: Failed to retrieve unifrom \"%s\" from the shader!\n"\
                         "File: %s, Line: %d\n", name, __FILE__, __LINE__);
 
-int bagT_init(int screenWidth, int screenHeight)
+int bagT_init(int windowWidth, int windowHeight)
 {
     bagT.boundInstance = NULL;
 
@@ -357,23 +357,23 @@ int bagT_init(int screenWidth, int screenHeight)
     bagT.memory.uni.scale     = glGetUniformLocation(bagT.memory.shaderProgram, "u_scale");
     BAGT_UNIFORM_CHECK(bagT.memory.uni.scale, "u_scale");
 
-    bagT_updateResolution(screenWidth, screenHeight);
+    bagT_updateResolution(windowWidth, windowHeight);
 
     return 0;
 }
 
 
-void bagT_updateResolution(int screenWidth, int screenHeight)
+void bagT_updateResolution(int windowWidth, int windowHeight)
 {
     glProgramUniform2i(
             bagT.simple.shaderProgram,
             bagT.simple.uni.screenRes,
-            screenWidth, screenHeight
+            windowWidth, windowHeight
     );
     glProgramUniform2i(
             bagT.memory.shaderProgram,
             bagT.memory.uni.screenRes,
-            screenWidth, screenHeight
+            windowWidth, windowHeight
     );
 }
 
