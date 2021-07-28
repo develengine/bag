@@ -4,6 +4,7 @@
 #include "bag_engine.h"
 #include "bag_keys.h"
 #include "bag_text.h"
+#include "bag_console.h"
 
 static int running = 1;
 
@@ -40,14 +41,14 @@ int bagE_main(int argc, char *argv[])
         return -1;
     }
 
+    if (bagC_init(winWidth, winHeight)) {
+        fprintf(stderr, "Failed to initialize console!\n");
+        return -1;
+    }
+
     bagE_setSwapInterval(1);
 
-    glClearColor(
-            0x0d / 255.f,
-            0x11 / 255.f,
-            0x17 / 255.f,
-            1.0f
-    );
+    glClearColor(1.0f, 1.0f, 1.0f, 1.0f);
 
     glEnable(GL_BLEND);
     glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -74,11 +75,14 @@ int bagE_main(int argc, char *argv[])
 
         glClear(GL_COLOR_BUFFER_BIT);
         
+        bagC_render(1.0f);
+
         bagE_swapBuffers();
 
         ++counter;
     }
 
+    bagC_destroy();
     bagT_destroy();
 
     return 0;
@@ -97,6 +101,7 @@ int bagE_eventHandler(bagE_Event *event)
             bagE_WindowResize *wr = &(event->data.windowResize);
             glViewport(0, 0, wr->width, wr->height);
             bagT_updateResolution(wr->width, wr->height);
+            bagC_updateResolution(wr->width, wr->height);
         } break;
 
         default: break;

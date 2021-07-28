@@ -821,6 +821,7 @@ void bagT_destroyInstance(bagT_Instance *instance)
     free(instance->glyphBuffer);
     glDeleteTextures(1, &instance->atlas);
     glDeleteBuffers(1, &instance->glyphs);
+    glDeleteVertexArrays(1, &instance->vao);
     free(instance);
 }
 
