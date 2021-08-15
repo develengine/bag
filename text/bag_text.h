@@ -59,6 +59,14 @@ typedef struct
     float r;
 } bagT_Transform;
 
+typedef struct
+{
+    unsigned vertexCount;
+    unsigned count;
+    unsigned vertexOffset;
+    unsigned index;
+} bagT_Segment;
+
 
 typedef void (*bagT_Compositor) (bagT_Instance*, void*, bagT_Char*, int*, int);
 
@@ -119,6 +127,8 @@ void bagT_renderCodepoints(
 void bagT_renderChars(bagT_Char *chars, int count, bagT_Transform transform);
 
 void bagT_renderMemory(int index, int count, bagT_Transform transform);
+
+void bagT_multiRenderMemory(bagT_Transform transform, bagT_Segment *segments, int count);
 
 void bagT_simpleCompositor(bagT_Instance *instance, void *data, bagT_Char *chars, int *glyphIndices, int length);
 
