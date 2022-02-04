@@ -811,6 +811,9 @@ void bagT_unbindInstance()
 
 void bagT_destroyFont(bagT_Font *font)
 {
+    if (!font) {
+        return;
+    }
     free(font->fontData);
     free(font);
 }
@@ -818,6 +821,9 @@ void bagT_destroyFont(bagT_Font *font)
 
 void bagT_destroyInstance(bagT_Instance *instance)
 {
+    if (!instance) {
+        return;
+    }
     free(instance->glyphBuffer);
     glDeleteTextures(1, &instance->atlas);
     glDeleteBuffers(1, &instance->glyphs);
@@ -913,6 +919,9 @@ void bagT_unbindMemory()
 
 void bagT_freeMemory(bagT_Memory *memory)
 {
+    if (!memory) {
+        return;
+    }
     glDeleteBuffers(1, &memory->memoryBuffer);
     glDeleteVertexArrays(1, &memory->vao);
     free(memory);
@@ -1168,4 +1177,12 @@ void bagT_renderMemory(int index, int count, bagT_Transform transform)
     glProgramUniform2i(bagT.memory.shaderProgram, bagT.memory.uni.position, transform.x, transform.y);
     glProgramUniform2f(bagT.memory.shaderProgram, bagT.memory.uni.scale, transform.w, transform.h);
     glDrawArraysInstancedBaseInstance(GL_TRIANGLES, 0, 6, count, index);
+}
+
+
+void bagT_multiRenderMemory(bagT_Transform transform, bagT_Segment *segments, int count)
+{
+    glProgramUniform2i(bagT.memory.shaderProgram, bagT.memory.uni.position, transform.x, transform.y);
+    glProgramUniform2f(bagT.memory.shaderProgram, bagT.memory.uni.scale, transform.w, transform.h);
+    glMultiDrawArraysIndirect(GL_TRIANGLES, segments, count, sizeof(bagT_Segment));
 }

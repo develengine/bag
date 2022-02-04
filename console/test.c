@@ -26,6 +26,11 @@ void GLAPIENTRY openglCallback(
 }
 
 
+void processInput(const char *text) {
+    printf("console: %s\n", text);
+}
+
+
 int bagE_main(int argc, char *argv[])
 {
     glEnable(GL_DEBUG_OUTPUT);
@@ -45,6 +50,22 @@ int bagE_main(int argc, char *argv[])
         fprintf(stderr, "Failed to initialize console!\n");
         return -1;
     }
+
+    bagC_BufferInfo bufferInfo = {
+        .name = "Mega Kek",
+        .bufferLineCount = 60,
+        .maxLineWidth = 80,
+        .inputBufferLength = 50,
+        .callback = &processInput
+    };
+
+    bagC_Buffer consoleBuffer;
+    if (bagC_createBuffer(&consoleBuffer, &bufferInfo)) {
+        fprintf(stderr, "Failed to create a console buffer!\n");
+        return -1;
+    }
+
+    bagC_bindBuffer(&consoleBuffer);
 
     bagE_setSwapInterval(1);
 
@@ -82,6 +103,7 @@ int bagE_main(int argc, char *argv[])
         ++counter;
     }
 
+    bagC_freeBuffer(&consoleBuffer);
     bagC_destroy();
     bagT_destroy();
 

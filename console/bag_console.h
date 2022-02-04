@@ -3,6 +3,10 @@
 
 #include "bag_text.h"
 
+#define BAGC_FONT_FILE_NAME "jbm.ttf"
+#define BAGC_FONT_INSTANCE_FILE_NAME "bagc-font-instance"
+#define BAGC_FONT_SIZE 25
+
 typedef enum
 {
     bagC_Enter,
@@ -24,18 +28,33 @@ typedef enum
 } bagC_Command;
 
 
-typedef void (*bagC_InputCallback) (char *);
+typedef void (*bagC_InputCallback) (const char *);
 
 
 typedef struct
 {
     int bufferLineCount;
     int maxLineWidth;
-    bagC_InputCallback inputCallback;
-    char *inputBuffer;
-    char **dataBuffer;
+    int inputBufferLength;
+
+    bagC_InputCallback callback;
+    int *inputBuffer;
+    int **lineBuffer;
     bagT_Memory *memory;
+    char *name;
+
+    int start;
+    int count;
 } bagC_Buffer;
+
+typedef struct
+{
+    char *name;
+    int bufferLineCount;
+    int maxLineWidth;
+    int inputBufferLength;
+    bagC_InputCallback callback;
+} bagC_BufferInfo;
 
 
 int bagC_init(int windowWidth, int windowHeight);
@@ -46,8 +65,8 @@ void bagC_destroy();
 
 void bagC_updateResolution(int windowWidth, int windowHeight);
 
-bagC_Buffer *bagC_createBuffer(const char *name, int bufferLineCount, int maxLineWidth);
-void bagC_bindBuffer(const bagC_Buffer *buffer);
+int bagC_createBuffer(bagC_Buffer *buffer, const bagC_BufferInfo *info);
+void bagC_bindBuffer(bagC_Buffer *buffer);
 void bagC_freeBuffer(bagC_Buffer *buffer);
 
 void bagC_writeLine(bagC_Buffer *buffer, const char *string);
